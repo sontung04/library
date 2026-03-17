@@ -30,3 +30,9 @@ management:
     web:
       exposure:
         include: health,info
+
+app:
+  jwt:
+    issuer: "user-service"
+    secret: faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593
+    expiration-seconds: 3600
