@@ -13,7 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 public class SecurityConfig {
 
-    private static final String[] AUTH_REQUEST = { "/login/**", "/oauth2/**", "/auth/**" };
+    private static final String[] AUTH_REQUEST = { "/api/users/**"};
     private static final String[] PUBLIC_GET_REQUEST = {};
     private static final String[] PUBLIC_POST_REQUEST = {};
     private static final String[] PUBLIC_PUT_REQUEST = {};

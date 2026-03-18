@@ -25,17 +25,17 @@ public class JwtService {
     /**
      * Build a JWT using using <code>HMAC_SHA</code> (HS256) with secret from properties
      * @param subject standard fields
-     * @param email custom claim
      * @param name custom claim
+     * @param email custom claim
      * @return a JWT token that can be return to the client 
      */
-    public String mintToken(String subject, String email, String name) {
+    public String mintToken(String subject, String name, String email) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(props.expirationSeconds());
 
         return Jwts.builder()
                 .issuer(props.issuer())
-                .subject(subject) // your local user id or provider+id
+                .subject(subject) // local user id or provider+id
                 .claim("email", email)
                 .claim("name", name)
                 .issuedAt(Date.from(now))

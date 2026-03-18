@@ -1,5 +1,6 @@
-package com.personal.user.Dtos;
+package com.personal.user.dtos;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -12,6 +13,7 @@ public class RegisterRequest{
     String username;
     
     @NotBlank
+    @Email
     String email;
 
     @NotBlank

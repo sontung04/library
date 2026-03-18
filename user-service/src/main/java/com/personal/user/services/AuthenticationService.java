@@ -6,9 +6,9 @@ import java.util.List;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.personal.user.Dtos.AuthResponse;
-import com.personal.user.Dtos.LoginRequest;
-import com.personal.user.Dtos.RegisterRequest;
+import com.personal.user.dtos.AuthResponse;
+import com.personal.user.dtos.LoginRequest;
+import com.personal.user.dtos.RegisterRequest;
 import com.personal.user.entities.User;
 import com.personal.user.enums.Role;
 import com.personal.user.exceptions.ErrorCode;
@@ -27,7 +27,7 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    public void register(RegisterRequest request) {
+    public void register(RegisterRequest request) throws WebException {
         log.info("Execute AuthenticationService::register");
 
         // Check if user exists
@@ -55,17 +55,16 @@ public class AuthenticationService {
         );
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request) throws WebException {
         log.info("Execute AuthenticationService::login");
 
-        User user = userRepository.findByUsername(null)
+        User user = userRepository.findByUsername(request.username().toLowerCase())
                 .orElseThrow(() -> new WebException(ErrorCode.USER_NOT_FOUND));
         
         log.info("Checking credentials...");
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new WebException(ErrorCode.INVALID_CREDENTIALS);
         }
-
 
         AuthResponse response = generateAuthResponse(user);
 
