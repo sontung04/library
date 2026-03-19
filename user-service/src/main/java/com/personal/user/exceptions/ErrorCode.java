@@ -10,7 +10,7 @@ import lombok.Getter;
 public enum ErrorCode {
     
     USER_EXISTS(1001, "User exists.", HttpStatus.BAD_REQUEST),
-    USER_NOT_FOUND(1002, "User not found.", HttpStatus.BAD_REQUEST),
+    USER_NOT_FOUND(1002, "User not found.", HttpStatus.NOT_FOUND),
     INVALID_CREDENTIALS(1003, "Invalid credentials.", HttpStatus.BAD_REQUEST),
     INVALID_ARGUMENTS(1004, "Invalid arguments", HttpStatus.BAD_REQUEST),
 

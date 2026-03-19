@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.personal.user.dtos.AuthResponse;
 import com.personal.user.dtos.LoginRequest;
@@ -27,6 +28,7 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
+    @Transactional
     public void register(RegisterRequest request) throws WebException {
         log.info("Execute AuthenticationService::register");
 
@@ -45,7 +47,7 @@ public class AuthenticationService {
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setRoles(Role.ROLE_USER);
+        user.setRoles(Arrays.asList(Role.ROLE_USER));
 
         User newUser = userRepository.save(user);
         log.info("A new user is created. User id: {}, username: {}, email: {}", 
@@ -77,11 +79,7 @@ public class AuthenticationService {
 
         List<String> roles = Arrays.asList(user.getRoles().toString());
 
-        String token = jwtService.mintToken(
-            user.getId().toString(),
-            user.getUsername(),
-            user.getEmail()
-        );
+        String token = jwtService.mintToken(user.getId().toString(), roles);
 
         log.info("Token generated: {} ", token);
 

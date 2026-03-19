@@ -18,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.personal.user.configurations.SecurityConfig;
 import com.personal.user.dtos.AuthResponse;
 import com.personal.user.dtos.LoginRequest;
 import com.personal.user.dtos.RegisterRequest;
@@ -26,7 +27,6 @@ import com.personal.user.exceptions.WebException;
 import com.personal.user.services.AuthenticationService;
 
 import org.springframework.context.annotation.Import;
-import com.personal.user.configurations.SecurityConfig;
 
 @WebMvcTest(AuthenticationController.class)
 @Import(SecurityConfig.class)

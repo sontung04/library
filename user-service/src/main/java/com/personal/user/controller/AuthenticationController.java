@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/auth")
 public class AuthenticationController {
     
     private final AuthenticationService authenticationService;
@@ -28,7 +28,7 @@ public class AuthenticationController {
 
     @PostMapping("/register")
     public ResponseEntity<Void> register(@Valid @RequestBody RegisterRequest request) {
-        log.info("Running endpoint /api/users/register");
+        log.info("Running endpoint /auth/register");
     
         authenticationService.register(request);
         return ResponseEntity.noContent().build();
@@ -36,7 +36,7 @@ public class AuthenticationController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
-        log.info("Running endpoint /api/users/login");
+        log.info("Running endpoint /auth/login");
 
         return ResponseEntity.ok(
                 new ApiResponse<AuthResponse>(

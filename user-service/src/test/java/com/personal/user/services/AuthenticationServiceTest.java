@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ class AuthenticationServiceTest {
         saved.setUsername("alice");
         saved.setEmail("alice@example.com");
         saved.setPasswordHash("hashed");
-        saved.setRoles(Role.ROLE_USER);
+        saved.setRoles(Arrays.asList(Role.ROLE_USER));
 
         when(userRepository.existsByUsername("alice")).thenReturn(false);
         when(passwordEncoder.encode("secret")).thenReturn("hashed");
@@ -91,11 +92,11 @@ class AuthenticationServiceTest {
         user.setUsername("alice");
         user.setEmail("alice@example.com");
         user.setPasswordHash("hashed");
-        user.setRoles(Role.ROLE_USER);
+        user.setRoles(Arrays.asList(Role.ROLE_USER));
 
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("secret", "hashed")).thenReturn(true);
-        when(jwtService.mintToken("1", "alice", "alice@example.com")).thenReturn("mock.jwt.token");
+        when(jwtService.mintToken("1", Arrays.asList(Role.ROLE_USER.toString()))).thenReturn("mock.jwt.token");
 
         AuthResponse response = authenticationService.login(request);
 
@@ -130,7 +131,7 @@ class AuthenticationServiceTest {
         user.setUsername("alice");
         user.setEmail("alice@example.com");
         user.setPasswordHash("hashed");
-        user.setRoles(Role.ROLE_USER);
+        user.setRoles(Arrays.asList(Role.ROLE_USER));
 
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrongpass", "hashed")).thenReturn(false);

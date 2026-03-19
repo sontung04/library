@@ -33,6 +33,3 @@ public class RegisterRequest{
         this.email = email.toLowerCase();
     }
 }
-    
-
-

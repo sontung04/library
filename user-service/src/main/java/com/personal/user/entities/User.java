@@ -1,5 +1,7 @@
 package com.personal.user.entities;
 
+import java.util.List;
+
 import com.personal.user.enums.Role;
 
 import jakarta.persistence.Column;
@@ -8,10 +10,14 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
 @Entity
+@AllArgsConstructor
+@NoArgsConstructor
 @Table(name = "users")
 public class User {
     
@@ -27,5 +33,5 @@ public class User {
     @Column(nullable = false)
     private String passwordHash;
 
-    private Role roles;
+    private List<Role> roles;
 }
