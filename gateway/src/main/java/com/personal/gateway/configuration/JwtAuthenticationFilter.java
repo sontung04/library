@@ -3,11 +3,14 @@ package com.personal.gateway.configuration;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -18,11 +21,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * A <code>GlobalFilter</code> that validates every request except <code>/auth/**</code> before other filters, routing
+ * A <code>GlobalFilter</code> that validates every request except
+ * <code>/auth/**</code> before other filters, routing
  */
 @Component
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final SecretKey key;
 
     public JwtAuthenticationFilter(@Value("${security.jwt.secret}") String secret) {
@@ -37,20 +42,32 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         String path = exchange.getRequest().getURI().getPath();
 
+        // Always allow preflight requests so browser CORS negotiation can complete.
+        if (HttpMethod.OPTIONS.equals(exchange.getRequest().getMethod())) {
+            logger.debug("CORS preflight request allowed: {} {}", exchange.getRequest().getMethod(), path);
+            return chain.filter(exchange);
+        }
+
         // Allow unauthenticated access to auth endpoints
         if (path.startsWith("/auth/")) {
+            logger.debug("Auth endpoint accessed without authentication: {} {}", exchange.getRequest().getMethod(),
+                    path);
             return chain.filter(exchange);
         }
 
         // For everything else, require Authorization: Bearer ...
         List<String> authHeaders = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION);
         if (authHeaders == null || authHeaders.isEmpty()) {
+            logger.warn("REQUEST BLOCKED: Missing Authorization header - {} {}", exchange.getRequest().getMethod(),
+                    path);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
 
         String authHeader = authHeaders.get(0);
         if (!authHeader.startsWith("Bearer ")) {
+            logger.warn("REQUEST BLOCKED: Invalid Authorization header format (expected 'Bearer ...') - {} {}",
+                    exchange.getRequest().getMethod(), path);
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -66,6 +83,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                     .parseSignedClaims(token)
                     .getPayload();
         } catch (Exception e) {
+            logger.warn("REQUEST BLOCKED: JWT validation failed - {} {} - Error: {}", exchange.getRequest().getMethod(),
+                    path, e.getMessage());
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
@@ -74,12 +93,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         @SuppressWarnings("unchecked")
         List<String> roles = (List<String>) claims.get("roles");
 
+        logger.info("REQUEST ALLOWED: Valid JWT - {} {} - User: {} - Roles: {}", exchange.getRequest().getMethod(),
+                path, userId, roles);
+
         // Mutate request: pass user info to downstream services
         ServerWebExchange mutated = exchange.mutate()
                 .request(builder -> builder
                         .header("X-User-Id", userId)
-                        .header("X-User-Roles", roles != null ? String.join(",", roles) : "")
-                )
+                        .header("X-User-Roles", roles != null ? String.join(",", roles) : ""))
                 .build();
 
         return chain.filter(mutated);

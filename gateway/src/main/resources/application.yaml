@@ -15,6 +15,22 @@ spring:
     gateway:
         server:
           webflux:
+            globalcors:
+              add-to-simple-url-handler-mapping: true
+              cors-configurations:
+                '[/**]':
+                  allowedOrigins:
+                    - http://localhost:5173
+                  allowedMethods:
+                    - GET
+                    - POST
+                    - PUT
+                    - PATCH
+                    - DELETE
+                    - OPTIONS
+                  allowedHeaders:
+                    - "*"
+                  allowCredentials: true
             discovery:
               locator:
                 enabled: true
@@ -33,7 +49,13 @@ spring:
                   - Path=/api/users/**
                 filters:
                   - StripPrefix=0
-                  
+              
+              - id: book-service
+                uri: lb://book-service
+                predicates:
+                  - Path=/api/books/**
+                filters:
+                  - StripPrefix=0                   
 eureka:
   client:
     service-url:
