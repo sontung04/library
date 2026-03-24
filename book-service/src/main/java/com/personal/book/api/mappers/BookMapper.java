@@ -46,8 +46,8 @@ public class BookMapper {
         book.setAuthor(request.author());
         book.setCategory(request.category());
         book.setIsbn(request.isbn());
-        book.setTotalCopies(request.copies());
-        book.setAvailableCopies(request.copies());
+        book.setTotalCopies(request.copies().intValue());
+        book.setAvailableCopies(request.copies().intValue());
         return book;
     }
 }

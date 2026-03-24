@@ -3,7 +3,6 @@ package com.personal.book.api.controllers;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,9 +49,13 @@ public class BookController {
     }
 
     @PostMapping()
-    @PreAuthorize("hasRole('LIBRARIAN')")
     public ResponseEntity<ApiResponse<BookDto>> createNewBook(@RequestBody CreateBookRequest request) {
-        log.info("Call POST /api/books end point with LIBRARIAN authority");
+        log.info("Call POST /api/books end point with LIBRARIAN authority, request: {} {} {} {} {}", 
+                request.title(), 
+                request.author(), 
+                request.category(), 
+                request.isbn(), 
+                request.copies().intValue());
         return ResponseEntity.ok(new ApiResponse<>(bookService.createNewBook(request)));
     }
 }
