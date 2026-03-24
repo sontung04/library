@@ -1,6 +1,7 @@
 package com.personal.user.services;
 
 import java.util.Arrays;
+import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -70,7 +71,8 @@ public class UserService {
         User user = findUserAndLog(userId);
         user.setUsername(request.username());
         user.setEmail(request.email());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        if (request.password() != null)
+            user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setRoles(request.roles() == null ? 
                 Arrays.asList(Role.ROLE_USER) :
                 request.roles());
@@ -87,5 +89,13 @@ public class UserService {
     public void deleteUser(Long userId) {
         log.info("Deleting a specified user if exists");
         userRepository.deleteById(userId);
+    }
+
+    public List<UserDto> getAllUsers() {
+        return userRepository
+                .findAll()
+                .stream()
+                .map(UserDto::fromEntity)
+                .toList();
     }
 }
