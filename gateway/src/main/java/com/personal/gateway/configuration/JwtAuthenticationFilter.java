@@ -102,7 +102,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                         .header("X-User-Id", userId)
                         .header("X-User-Roles", roles != null ? String.join(",", roles) : ""))
                 .build();
-
+            
         return chain.filter(mutated);
     }
 
