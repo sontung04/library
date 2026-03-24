@@ -39,9 +39,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = WebException.class)
     ResponseEntity<ApiResponse<Void>> handleWebException(WebException e) {
+        ErrorCode errorCode = (e != null && e.getErrorCode() != null)
+                ? e.getErrorCode()
+                : ErrorCode.UNCATEGORIZED_EXCEPTION;
 
-        log.info("Handling custom WebException: {}", e.getErrorCode().name());
-        return response(e.getErrorCode(), null);
+        log.info("Handling custom WebException: {}", errorCode.name());
+        return response(errorCode, null);
     }
 
     /**
@@ -90,12 +93,8 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException e) {
         log.info("Handling method argument type mismatch exception");
 
-        String receivedValueTypeName = (e.getValue() != null) ? 
-                e.getValue().getClass().getSimpleName() :  
-                "null";
-        String expectedValueTypeName = (e.getRequiredType() != null) ? 
-                e.getRequiredType().getSimpleName() : 
-                "null";
+        String receivedValueTypeName = (e.getValue() != null) ? e.getValue().getClass().getSimpleName() : "null";
+        String expectedValueTypeName = (e.getRequiredType() != null) ? e.getRequiredType().getSimpleName() : "null";
 
         String message = String.format(
                 "Invalid value for parameter %s. Received type: %s. Expected type: %s",

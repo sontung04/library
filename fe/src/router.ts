@@ -1,8 +1,8 @@
 import type { Page } from './types';
 import { loginPage, registerPage } from './pages/auth';
-import { createBookPage, booksPage, bookDetailsPage } from './pages/books';
+import { createBookPage, booksPage, bookDetailsPage, editBookPage } from './pages/books';
 import { createLoanPage, myLoansPage } from './pages/loans';
-import { usersListPage, editUserPage, myProfilePage } from './pages/users';
+import { usersListPage, editUserPage, myProfilePage, createUserPage } from './pages/users';
 import { homePage, notFoundPage } from './pages/home';
 
 export function getPage(pathname: string): Page {
@@ -31,6 +31,11 @@ export function getPage(pathname: string): Page {
     return bookDetailsPage(bookDetailMatch[1]);
   }
 
+  const editBookMatch = pathname.match(/^\/books\/([^/]+)\/edit$/);
+  if (editBookMatch) {
+    return editBookPage(editBookMatch[1]);
+  }
+
   if (pathname === '/loans/create') {
     return createLoanPage();
   }
@@ -41,6 +46,10 @@ export function getPage(pathname: string): Page {
 
   if (pathname === '/users/me') {
     return myProfilePage();
+  }
+
+  if (pathname === '/users/create') {
+    return createUserPage();
   }
 
   if (pathname === '/users') {

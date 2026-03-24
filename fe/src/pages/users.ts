@@ -4,6 +4,60 @@ import { getInputValue, setApiOutput, setMessage, navigate, unwrapResponseData }
 
 const ALL_ROLES = ['ROLE_USER', 'ROLE_LIBRARIAN', 'ROLE_ADMIN'] as const;
 
+export function createUserPage(): Page {
+  return {
+    title: 'Create User',
+    html: `
+      <section class="panel">
+        <h2>POST /api/admin/users/new</h2>
+        <form id="create-user-form" class="form-grid">
+          <label>Username <input id="create-username" type="text" required /></label>
+          <label>Email <input id="create-email" type="email" required /></label>
+          <label>Password <input id="create-password" type="password" required /></label>
+          <fieldset class="roles-fieldset">
+            <legend>Roles</legend>
+            <div class="roles-checkboxes">
+              ${ALL_ROLES.map((role) => `
+                <label class="checkbox-label">
+                  <input type="checkbox" name="role" value="${role}" />
+                  ${role}
+                </label>
+              `).join('')}
+            </div>
+          </fieldset>
+          <button type="submit">Create User</button>
+        </form>
+        <p id="create-user-message" class="inline-message"></p>
+        <pre id="create-user-output" class="api-output"></pre>
+      </section>
+    `,
+    setup: () => {
+      const form = document.getElementById('create-user-form') as HTMLFormElement | null;
+      if (!form) {
+        return;
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const username = getInputValue('create-username');
+        const email = getInputValue('create-email');
+        const password = getInputValue('create-password');
+        const roles = Array.from(
+          form.querySelectorAll<HTMLInputElement>('input[name="role"]:checked'),
+        ).map((cb) => cb.value);
+
+        const response = await request('/api/admin/users/new', 'POST', { username, email, password, roles });
+        setApiOutput('create-user-output', response);
+        setMessage(
+          'create-user-message',
+          response.ok ? 'User created successfully.' : 'Failed to create user.',
+          !response.ok,
+        );
+      });
+    },
+  };
+}
+
 export function usersListPage(): Page {
   return {
     title: 'Users',
@@ -11,7 +65,10 @@ export function usersListPage(): Page {
       <section class="panel">
         <div class="row-between">
           <h2>GET /api/admin/users</h2>
-          <button id="reload-users" type="button">Reload</button>
+          <div>
+            <button id="create-user-btn" type="button">Create User</button>
+            <button id="reload-users" type="button">Reload</button>
+          </div>
         </div>
         <div id="users-message" class="inline-message"></div>
         <div id="users-list" class="list"></div>
@@ -101,6 +158,7 @@ export function usersListPage(): Page {
       };
 
       document.getElementById('reload-users')?.addEventListener('click', loadUsers);
+      document.getElementById('create-user-btn')?.addEventListener('click', () => navigate('/users/create'));
       void loadUsers();
     },
   };
