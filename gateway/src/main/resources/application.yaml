@@ -1,23 +1,68 @@
 server:
   port: 8080
 
+security:
+  jwt:
+    secret: faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593
+
 spring:
+  main:
+    web-application-type: reactive
   application:
     name: api-gateway
 
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true         # enable service discovery-based routing
-          lower-case-service-id: true
-      routes:
-        # Example static route (optional, if you also want explicit routes)
-        - id: user-service
-          uri: lb://user-service
-          predicates:
-            - Path=/users/**
+      server:
+        webflux:
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              "[/**]":
+                allowedOrigins:
+                  - http://localhost:5173
+                allowedMethods:
+                  - GET
+                  - POST
+                  - PUT
+                  - PATCH
+                  - DELETE
+                  - OPTIONS
+                allowedHeaders:
+                  - "*"
+                allowCredentials: true
+          discovery:
+            locator:
+              enabled: true
+              lower-case-service-id: true
+          routes:
+            - id: user-service-auth
+              uri: lb://user-service
+              predicates:
+                - Path=/auth/**
+              filters:
+                - StripPrefix=0
 
+            - id: user-service-users
+              uri: lb://user-service
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - StripPrefix=0
+            
+            - id: user-service-admin
+              uri: lb://user-service
+              predicates:
+                - Path=/api/admin/users/**
+              filters:
+                - StripPrefix=0
+
+            - id: book-service
+              uri: lb://BOOK-SERVICE
+              predicates:
+                - Path=/api/books/**
+              filters:
+                - StripPrefix=0
 eureka:
   client:
     service-url:
@@ -29,4 +74,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,gateway
