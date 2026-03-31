@@ -1,0 +1,40 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  docker:
+    compose:
+      enabled: false
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/user_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  jwt:
+    issuer: "user-service"
+    secret: faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593
+    expiration-seconds: 3600
