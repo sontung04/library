@@ -39,9 +39,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = WebException.class)
     ResponseEntity<ApiResponse<Void>> handleWebException(WebException e) {
+        ErrorCode errorCode = (e != null && e.getErrorCode() != null)
+                ? e.getErrorCode()
+                : ErrorCode.UNCATEGORIZED_EXCEPTION;
 
-        log.info("Handling custom WebException: {}", e.getErrorCode().name());
-        return response(e.getErrorCode(), null);
+        log.info("Handling custom WebException: {}", errorCode.name());
+        return response(errorCode, null);
     }
 
     /**

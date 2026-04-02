@@ -32,14 +32,13 @@ public class LoanController {
     public LoanController(LoanService loanService) {
         this.loanService = loanService;
     }
-    
+
     @PostMapping
     @PreAuthorize("hasRole('USER')")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<LoanDto> createLoan(
-        @RequestHeader("X-User-Id") Long userId,
-        @Valid @RequestBody CreateLoanRequest request
-    ) {
+            @RequestHeader("X-User-Id") Long userId,
+            @Valid @RequestBody CreateLoanRequest request) {
         return new ApiResponse<>("Loan created.", loanService.createLoan(userId, request));
     }
 
@@ -47,8 +46,7 @@ public class LoanController {
     @PreAuthorize("hasRole('USER')")
     @ResponseStatus(HttpStatus.OK)
     public ApiResponse<List<LoanDto>> getMyLoans(
-        @RequestHeader("X-User-Id") Long userId
-    ) {
+            @RequestHeader("X-User-Id") Long userId) {
         return new ApiResponse<>(loanService.getUserLoans(userId));
     }
 
@@ -70,8 +68,7 @@ public class LoanController {
     @PreAuthorize("hasRole('LIBRARIAN')")
     @ResponseStatus(HttpStatus.OK)
     public ApiResponse<LoanDto> returnLoan(
-        @PathVariable Long id
-    ) {
+            @PathVariable Long id) {
         return new ApiResponse<>("Loan returned.", loanService.returnLoan(id));
     }
 }

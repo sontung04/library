@@ -12,7 +12,6 @@ import com.personal.loan.api.dtos.LoanDto;
 import com.personal.loan.api.dtos.LoanItemDto;
 import com.personal.loan.api.mappers.LoanMapper;
 import com.personal.loan.domain.entities.Loan;
-import com.personal.loan.domain.entities.LoanItem;
 import com.personal.loan.domain.entities.LoanStatus;
 import com.personal.loan.domain.exception.ErrorCode;
 import com.personal.loan.domain.exception.WebException;
@@ -29,28 +28,33 @@ public class LoanService {
 
     private final LoanRepository loanRepository;
     private final BookClient bookClient;
+    private final UserClient userClient;
 
     @Transactional
     public LoanDto createLoan(Long userId, CreateLoanRequest request) {
         log.info("Executing LoanService::createLoan");
 
-        List<LoanItemDto> items = List.of(new LoanItemDto(request.bookId(), 1, null));
+        LoanItemDto item = new LoanItemDto(request.bookId(), "", "", false);
 
         if (!checkBooksStatus(items))
             throw new WebException(ErrorCode.INSUFFICIENT_BOOK_STOCK);
 
+        BookDto book = bookClient.getBook(request.bookId());
+        if (book == null) {
+            throw new WebException(ErrorCode.INSUFFICIENT_BOOK_STOCK);
+        }
+        String username = userClient.getUsername(userId);
+
         items.forEach(this::subtractBookAmountFromDb);
 
-        Loan createdLoan = loanRepository.save(LoanMapper.toEntity(userId, request));
+        Loan createdLoan = loanRepository.save(LoanMapper.toEntity(userId, username, request, book));
 
         return enrichLoan(createdLoan);
     }
 
-    private boolean checkBooksStatus(List<LoanItemDto> items) {
-        return items.stream().allMatch(item -> {
-            BookDto book = bookClient.getBook(item.bookId());
-            return book != null && book.availableCopies() >= item.amount();
-        });
+    private boolean checkBooksStatus(Long bookId) {
+        BookDto book = bookClient.getBook(bookId);
+        
     }
 
     private void subtractBookAmountFromDb(LoanItemDto item) {
@@ -72,6 +76,10 @@ public class LoanService {
 
     public List<LoanDto> getLoansByUserId(Long userId) {
         return getUserLoans(userId);
+    }
+
+    public boolean hasActiveLoans(Long userId) {
+        return loanRepository.existsByUserIdAndStatus(userId, LoanStatus.ACTIVE);
     }
 
     private List<Loan> retrieveUserLoansFromDb(Long userId) {
@@ -104,7 +112,7 @@ public class LoanService {
             throw new WebException(ErrorCode.LOAN_NOT_ACTIVE);
         }
 
-        loan.getItems().forEach(this::restoreBookStock);
+        restoreBookStock(loan.getBookId());
         loan.setStatus(LoanStatus.RETURNED);
         loan.setReturnDate(LocalDate.now());
 
@@ -114,12 +122,20 @@ public class LoanService {
     private LoanDto enrichLoan(Loan loan) {
         LoanDto baseLoan = LoanMapper.toDto(loan);
         List<LoanItemDto> enrichedItems = baseLoan.items().stream()
-                .map(item -> new LoanItemDto(item.bookId(), item.amount(), bookClient.getBook(item.bookId())))
+                .map(item -> new LoanItemDto(
+                        item.bookId(),
+                        item.bookTitle(),
+                        item.bookIsbn(),
+                        item.bookDeleted(),
+                        item.amount(),
+                        item.bookDeleted() ? null : bookClient.getBook(item.bookId())))
                 .toList();
 
         return new LoanDto(
                 baseLoan.id(),
                 baseLoan.userId(),
+                baseLoan.userUsername(),
+                baseLoan.userDeleted(),
                 enrichedItems,
                 baseLoan.loanDate(),
                 baseLoan.dueDate(),
@@ -127,10 +143,31 @@ public class LoanService {
                 baseLoan.status());
     }
 
-    private void restoreBookStock(LoanItem item) {
-        BookDto book = bookClient.getBook(item.getBookId());
+    @Transactional
+    public void applyUserLifecycleEvent(Long userId, String username, boolean deleted) {
+        List<Loan> loans = loanRepository.findByUserId(userId);
+        loans.forEach(loan -> {
+            loan.setUserUsername(username);
+            loan.setUserDeleted(deleted);
+        });
+        loanRepository.saveAll(loans);
+    }
+
+    @Transactional
+    public void applyBookDeletedEvent(Long bookId, String title, String isbn) {
+        List<Loan> loans = loanRepository.findByBookId(bookId);
+        loans.forEach(loan -> {
+            loan.setBookTitle(title);
+            loan.setBookIsbn(isbn);
+            loan.setBookDeleted(true);
+        });
+        loanRepository.saveAll(loans);
+    }
+
+    private void restoreBookStock(Long bookId) {
+        BookDto book = bookClient.getBook(bookId);
         if (book != null) {
-            bookClient.updateAvailability(item.getBookId(), book.availableCopies() + item.getAmount());
+            bookClient.updateAvailability(bookId, book.availableCopies() + 1);
         }
     }
 }

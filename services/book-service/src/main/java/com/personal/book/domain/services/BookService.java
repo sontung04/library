@@ -15,6 +15,7 @@ import com.personal.book.domain.entities.Book;
 import com.personal.book.domain.exception.ErrorCode;
 import com.personal.book.domain.exception.WebException;
 import com.personal.book.domain.repositories.BookRepository;
+import com.personal.book.events.BookLifecycleEventPublisher;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -23,9 +24,12 @@ import lombok.extern.slf4j.Slf4j;
 public class BookService {
 
     private final BookRepository bookRepository;
+    private final BookLifecycleEventPublisher bookLifecycleEventPublisher;
 
-    public BookService(BookRepository bookRepository) {
+    public BookService(BookRepository bookRepository,
+            BookLifecycleEventPublisher bookLifecycleEventPublisher) {
         this.bookRepository = bookRepository;
+        this.bookLifecycleEventPublisher = bookLifecycleEventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -91,11 +95,12 @@ public class BookService {
         return BookMapper.toDto(bookRepository.save(book));
     }
 
+    @Transactional
     public void deleteBook(Long id) {
-        if (!bookRepository.existsById(id)) {
-            throw new WebException(ErrorCode.BOOK_NOT_FOUND);
-        }
-        bookRepository.deleteById(id);
+        Book book = bookRepository.findById(id)
+                .orElseThrow(() -> new WebException(ErrorCode.BOOK_NOT_FOUND));
+        bookRepository.delete(book);
+        bookLifecycleEventPublisher.publishDeleted(book);
         log.info("Book {} deleted.", id);
     }
 }

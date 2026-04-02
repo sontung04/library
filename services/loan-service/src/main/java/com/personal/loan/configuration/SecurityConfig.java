@@ -26,7 +26,7 @@ import static org.springframework.http.HttpMethod.POST;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] PUBLIC_REQUESTS = { "/auth/**", "/actuator/health" };
+    private static final String[] PUBLIC_REQUESTS = { "/auth/**", "/actuator/health", "/internal/**" };
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) {

@@ -16,6 +16,7 @@ public enum ErrorCode {
     UNAUTHORIZED(1005, "Unauthorized", HttpStatus.UNAUTHORIZED),
     INVALID_TOKEN(1006, "Invalid token", HttpStatus.UNAUTHORIZED),
     TOKEN_REVOKED(1007, "Token revoked", HttpStatus.UNAUTHORIZED),
+    USER_HAS_ACTIVE_LOANS(1008, "User still has books not returned.", HttpStatus.CONFLICT),
 
     UNCATEGORIZED_EXCEPTION(9999, "Uncategorized exception.", HttpStatus.INTERNAL_SERVER_ERROR);
     

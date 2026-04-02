@@ -1,0 +1,41 @@
+databaseChangeLog:
+  - changeSet:
+      id: 2
+      author: library
+      changes:
+        - addColumn:
+            tableName: loans
+            columns:
+              - column:
+                  name: user_username
+                  type: VARCHAR(255)
+                  defaultValue: unknown
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_deleted
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - addColumn:
+            tableName: loan_items
+            columns:
+              - column:
+                  name: book_title
+                  type: VARCHAR(255)
+                  defaultValue: unknown
+                  constraints:
+                    nullable: false
+              - column:
+                  name: book_isbn
+                  type: VARCHAR(255)
+                  defaultValue: unknown
+                  constraints:
+                    nullable: false
+              - column:
+                  name: book_deleted
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
