@@ -1,4 +1,4 @@
-import { clearAuth, getStoredUser } from './api';
+import { callLogout, getStoredUser } from './api';
 import type { ApiResult, AuthUser, FlashMessage } from './types';
 
 const FLASH_KEY = 'library_flash';
@@ -62,9 +62,10 @@ export function bindNavigationLinks(): void {
   const logoutButton = document.getElementById('logout-button');
   if (logoutButton && logoutButton.dataset.navBound !== 'true') {
     logoutButton.addEventListener('click', () => {
-      clearAuth();
-      pushFlash({ tone: 'success', text: 'You have been logged out.' });
-      navigate('/');
+      void callLogout().finally(() => {
+        pushFlash({ tone: 'success', text: 'You have been logged out.' });
+        navigate('/');
+      });
     });
     logoutButton.dataset.navBound = 'true';
   }

@@ -10,9 +10,19 @@
     "description": "App's secret to encode JWT"
   },
   {
-    "name": "app.jwt.expiration-seconds",
-    "type": "java.lang.String",
-    "description": "Expiration timer of JWT"
+    "name": "app.jwt.access-expiration-seconds",
+    "type": "java.lang.Long",
+    "description": "Access token expiration in seconds"
+  },
+  {
+    "name": "app.jwt.refresh-expiration-seconds",
+    "type": "java.lang.Long",
+    "description": "Refresh token expiration in seconds"
+  },
+  {
+    "name": "app.jwt.user-cache-ttl-seconds",
+    "type": "java.lang.Long",
+    "description": "TTL in seconds for cached user auth info in Redis"
   },
   {
     "name": "app.oauth2.success-redirect",

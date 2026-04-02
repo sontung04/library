@@ -7,6 +7,10 @@ spring:
   docker:
     compose:
       enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/user_db}
     username: ${DB_USERNAME:postgres}
@@ -34,7 +38,13 @@ management:
         include: health,info
 
 app:
+  internal:
+    api-key: ${INTERNAL_API_KEY:zvk93JOJEssmt82kQW+NEYQQFa2CAHUX5Mqnd1mA6yE=}
+  auth:
+    trust-gateway-validation: ${TRUST_GATEWAY_VALIDATION:false}
   jwt:
     issuer: "user-service"
     secret: faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593
-    expiration-seconds: 3600
+    access-expiration-seconds: 900
+    refresh-expiration-seconds: 1209600
+    user-cache-ttl-seconds: 3600

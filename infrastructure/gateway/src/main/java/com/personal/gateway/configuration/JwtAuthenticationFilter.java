@@ -1,11 +1,8 @@
 package com.personal.gateway.configuration;
 
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.core.Ordered;
@@ -14,10 +11,13 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+
+import com.personal.gateway.service.GatewayJwtService;
+import com.personal.gateway.service.GatewayUserAuthCacheService;
+import com.personal.gateway.service.GatewayUserAuthClient;
+
 import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -28,10 +28,17 @@ import java.util.List;
 public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-    private final SecretKey key;
+    private final GatewayJwtService gatewayJwtService;
+    private final GatewayUserAuthCacheService gatewayUserAuthCacheService;
+    private final GatewayUserAuthClient gatewayUserAuthClient;
 
-    public JwtAuthenticationFilter(@Value("${security.jwt.secret}") String secret) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    public JwtAuthenticationFilter(
+            GatewayJwtService gatewayJwtService,
+            GatewayUserAuthCacheService gatewayUserAuthCacheService,
+            GatewayUserAuthClient gatewayUserAuthClient) {
+        this.gatewayJwtService = gatewayJwtService;
+        this.gatewayUserAuthCacheService = gatewayUserAuthCacheService;
+        this.gatewayUserAuthClient = gatewayUserAuthClient;
     }
 
     /**
@@ -75,35 +82,56 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         // Extract info from the token
         String token = authHeader.substring(7);
 
-        Claims claims;
         try {
-            claims = Jwts.parser()
-                    .verifyWith(key)
-                    .build()
-                    .parseSignedClaims(token)
-                    .getPayload();
+            Long userId = gatewayJwtService.extractSubjectWithoutValidation(token);
+
+            return gatewayUserAuthCacheService.readSnapshot(userId)
+                    .switchIfEmpty(gatewayUserAuthClient.fetchAndCache(userId))
+                    .flatMap(snapshot -> {
+                        Claims claims = gatewayJwtService.validateAccessToken(token);
+                        String jti = claims.getId();
+
+                        Mono<Boolean> revokedCheck = jti == null
+                                ? Mono.just(false)
+                                : gatewayUserAuthCacheService.isJtiRevoked(jti);
+
+                        return revokedCheck.flatMap(isRevoked -> {
+                            if (isRevoked) {
+                                logger.warn("REQUEST BLOCKED: revoked access token jti={} path={}", jti, path);
+                                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                                return exchange.getResponse().setComplete();
+                            }
+
+                            logger.info("REQUEST ALLOWED: user-exists and JWT valid - {} {} - User: {} - Roles: {}",
+                                    exchange.getRequest().getMethod(),
+                                    path,
+                                    snapshot.userId(),
+                                    snapshot.roles());
+
+                            ServerWebExchange mutated = exchange.mutate()
+                                    .request(builder -> builder
+                                            .header("X-User-Id", snapshot.userId().toString())
+                                            .header("X-User-Roles", String.join(",", snapshot.roles()))
+                                            .header("X-Auth-Validated", "true"))
+                                    .build();
+
+                            return chain.filter(mutated);
+                        });
+                    })
+                    .onErrorResume(e -> {
+                        logger.warn("REQUEST BLOCKED: auth/user-check failed - {} {} - Error: {}",
+                                exchange.getRequest().getMethod(),
+                                path,
+                                e.getMessage());
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    });
         } catch (Exception e) {
             logger.warn("REQUEST BLOCKED: JWT validation failed - {} {} - Error: {}", exchange.getRequest().getMethod(),
                     path, e.getMessage());
             exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
             return exchange.getResponse().setComplete();
         }
-
-        String userId = claims.getSubject();
-        @SuppressWarnings("unchecked")
-        List<String> roles = (List<String>) claims.get("roles");
-
-        logger.info("REQUEST ALLOWED: Valid JWT - {} {} - User: {} - Roles: {}", exchange.getRequest().getMethod(),
-                path, userId, roles);
-
-        // Mutate request: pass user info to downstream services
-        ServerWebExchange mutated = exchange.mutate()
-                .request(builder -> builder
-                        .header("X-User-Id", userId)
-                        .header("X-User-Roles", roles != null ? String.join(",", roles) : ""))
-                .build();
-            
-        return chain.filter(mutated);
     }
 
     /**

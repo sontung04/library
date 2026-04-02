@@ -15,20 +15,20 @@ import com.personal.user.exceptions.ErrorCode;
 import com.personal.user.exceptions.WebException;
 import com.personal.user.repositories.UserRepository;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserAuthCacheService userAuthCacheService;
+    private final TokenStateService tokenStateService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
 
-    }
 
     private User findUserAndLog(Long userId) {
         User user = userRepository.findById(userId)
@@ -78,6 +78,7 @@ public class UserService {
                 request.roles());
         
         User updatedUser = userRepository.save(user);
+        userAuthCacheService.evict(updatedUser.getId());
         log.info("A user has been updated. User id: {}, username: {}, email: {}", 
             updatedUser.getId(), 
             updatedUser.getUsername(), 
@@ -89,6 +90,8 @@ public class UserService {
     public void deleteUser(Long userId) {
         log.info("Deleting a specified user if exists");
         userRepository.deleteById(userId);
+        userAuthCacheService.evict(userId);
+        tokenStateService.clearActiveRefreshJti(userId);
     }
 
     public List<UserDto> getAllUsers() {

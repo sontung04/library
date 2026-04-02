@@ -28,9 +28,11 @@ export type AuthUser = {
 };
 
 export type LoginPayload = {
-  token: string;
+  accessToken: string;
+  refreshToken: string;
   tokenType: string;
-  expiresIn: number;
+  accessExpiresIn: number;
+  refreshExpiresIn: number;
   userId: number;
   username: string;
   roles: string[];

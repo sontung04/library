@@ -22,7 +22,12 @@ import lombok.extern.slf4j.Slf4j;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] AUTH_REQUEST = { "/auth/**"};
+    private static final String[] PUBLIC_REQUEST = { "/auth/**", "/internal/auth/**" };
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) {
@@ -30,30 +35,29 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(requests -> requests
-                        .requestMatchers(AUTH_REQUEST).permitAll()
+                        .requestMatchers(PUBLIC_REQUEST).permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
-                    .accessDeniedHandler((request, response, e) -> {
-                        Authentication auth = SecurityContextHolder
-                                .getContext().getAuthentication();
-                        String user = auth != null ? auth.getName() : "anonymous";
+                        .accessDeniedHandler((request, response, e) -> {
+                            Authentication auth = SecurityContextHolder
+                                    .getContext().getAuthentication();
+                            String user = auth != null ? auth.getName() : "anonymous";
 
-                        log.warn("ACCESS DENIED: user={}, path={} {}, roles={}, reason={}",
-                                user,
-                                request.getMethod(),
-                                request.getRequestURI(),
-                                auth != null ? auth.getAuthorities() : "[]",
-                                e.getMessage());
+                            log.warn("ACCESS DENIED: user={}, path={} {}, roles={}, reason={}",
+                                    user,
+                                    request.getMethod(),
+                                    request.getRequestURI(),
+                                    auth != null ? auth.getAuthorities() : "[]",
+                                    e.getMessage());
 
-                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                        response.setContentType("application/json");
-                        response.getWriter().write("""
-                            {"error":"forbidden","message":"Access is denied"}
-                            """);
-                    })
-                ) 
-                .addFilterBefore(new HeaderAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            response.getWriter().write("""
+                                    {"error":"forbidden","message":"Access is denied"}
+                                    """);
+                        }))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 

@@ -7,6 +7,10 @@ spring:
   docker:
     compose:
       enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5434/book_db}
     username: ${DB_USERNAME:postgres}

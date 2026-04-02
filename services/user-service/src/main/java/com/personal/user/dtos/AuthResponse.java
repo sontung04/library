@@ -4,9 +4,11 @@ import java.util.List;
 
 public record AuthResponse(
 
-    String token,
+    String accessToken,
+    String refreshToken,
     String tokenType,
-    Long expiresIn, // in seconds
+    Long accessExpiresIn,
+    Long refreshExpiresIn,
 
     Long userId,
     String username,

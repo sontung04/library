@@ -1,4 +1,4 @@
-import { setStoredUser, setToken, typedRequest } from '../api';
+import { setStoredUser, setTokens, typedRequest } from '../api';
 import type { AuthUser, LoginPayload, Page } from '../types';
 import { getInputValue, navigate, pushFlash, setMessage } from '../utils';
 
@@ -31,7 +31,11 @@ export function loginPage(): Page {
         const response = await typedRequest<LoginPayload>('/auth/login', 'POST', { username, password });
 
         if (response.ok && response.data) {
-          setToken(response.data.token);
+          setTokens({
+            accessToken: response.data.accessToken,
+            refreshToken: response.data.refreshToken,
+            accessExpiresIn: response.data.accessExpiresIn,
+          });
           const profileResponse = await typedRequest<AuthUser>('/api/users/me', 'GET');
 
           if (profileResponse.ok && profileResponse.data) {

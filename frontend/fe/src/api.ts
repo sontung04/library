@@ -1,20 +1,33 @@
-import type { ApiEnvelope, ApiResult, AuthUser, HttpMethod } from './types';
+import type { ApiEnvelope, ApiResult, AuthUser, HttpMethod, LoginPayload } from './types';
 
 export const API_BASE_URL = '';
-const TOKEN_KEY = 'library_token';
+const ACCESS_TOKEN_KEY = 'library_access_token';
+const REFRESH_TOKEN_KEY = 'library_refresh_token';
+const ACCESS_EXPIRY_KEY = 'library_access_expiry';
 const USER_KEY = 'library_user';
 
+/** Returns the stored access token (may be expired). */
 export function getToken(): string {
-  return localStorage.getItem(TOKEN_KEY) ?? '';
+  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? '';
 }
 
-export function setToken(token: string): void {
-  if (!token) {
-    localStorage.removeItem(TOKEN_KEY);
-    return;
-  }
+export function getRefreshToken(): string {
+  return localStorage.getItem(REFRESH_TOKEN_KEY) ?? '';
+}
 
-  localStorage.setItem(TOKEN_KEY, token);
+export function setTokens(payload: Pick<LoginPayload, 'accessToken' | 'refreshToken' | 'accessExpiresIn'>): void {
+  localStorage.setItem(ACCESS_TOKEN_KEY, payload.accessToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, payload.refreshToken);
+  // Store absolute expiry timestamp so we can refresh proactively
+  const expiresAt = Date.now() + payload.accessExpiresIn * 1000;
+  localStorage.setItem(ACCESS_EXPIRY_KEY, String(expiresAt));
+}
+
+/** True if the access token will expire within the next 60 seconds. */
+function isAccessTokenExpiringSoon(): boolean {
+  const raw = localStorage.getItem(ACCESS_EXPIRY_KEY);
+  if (!raw) return true;
+  return Date.now() >= Number(raw) - 60_000;
 }
 
 export function getStoredUser(): AuthUser | null {
@@ -41,8 +54,62 @@ export function setStoredUser(user: AuthUser | null): void {
 }
 
 export function clearAuth(): void {
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(ACCESS_EXPIRY_KEY);
   localStorage.removeItem(USER_KEY);
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function tryRefreshTokens(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      clearAuth();
+      return false;
+    }
+
+    const payload = await response.json() as { data: LoginPayload };
+    const data = payload.data;
+    setTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+      accessExpiresIn: data.accessExpiresIn,
+    });
+    return true;
+  } catch {
+    clearAuth();
+    return false;
+  }
+}
+
+export async function callLogout(): Promise<void> {
+  const refreshToken = getRefreshToken();
+  const accessToken = getToken();
+  if (refreshToken) {
+    try {
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch {
+      // best-effort
+    }
+  }
+  clearAuth();
 }
 
 export async function request(
@@ -50,17 +117,37 @@ export async function request(
   method: HttpMethod,
   body?: unknown,
 ): Promise<ApiResult<unknown>> {
-  const token = getToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  const isAuthEndpoint = endpoint.startsWith('/auth/');
 
-  if (token && !endpoint.startsWith('/auth/')) {
+  // Proactively refresh before the access token expires
+  if (!isAuthEndpoint && getToken() && isAccessTokenExpiringSoon()) {
+    refreshInFlight ??= tryRefreshTokens().finally(() => { refreshInFlight = null; });
+    await refreshInFlight;
+  }
+
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  const token = getToken();
+  if (token && !isAuthEndpoint) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   try {
-    return await performRequest(endpoint, method, headers, body);
+    const result = await performRequest(endpoint, method, headers, body);
+
+    // If 401 and we have a refresh token, try once to refresh and replay
+    if (result.status === 401 && !isAuthEndpoint) {
+      refreshInFlight ??= tryRefreshTokens().finally(() => { refreshInFlight = null; });
+      const refreshed = await refreshInFlight;
+      if (refreshed) {
+        const retryHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        };
+        return performRequest(endpoint, method, retryHeaders, body);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       ok: false,
@@ -119,9 +206,21 @@ export async function typedRequest<T>(
 
 export async function hydrateCurrentUser(): Promise<AuthUser | null> {
   const token = getToken();
-  if (!token) {
+  const refreshToken = getRefreshToken();
+
+  if (!token && !refreshToken) {
     setStoredUser(null);
     return null;
+  }
+
+  // If access token is expiring soon but we have a refresh token, refresh first
+  if (refreshToken && isAccessTokenExpiringSoon()) {
+    refreshInFlight ??= tryRefreshTokens().finally(() => { refreshInFlight = null; });
+    const refreshed = await refreshInFlight;
+    if (!refreshed) {
+      setStoredUser(null);
+      return null;
+    }
   }
 
   const cachedUser = getStoredUser();
