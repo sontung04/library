@@ -31,130 +31,131 @@ import com.personal.user.services.AuthenticationService;
 @AutoConfigureMockMvc(addFilters = false)
 class AuthenticationControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Autowired
+        private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+        @Autowired
+        private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private AuthenticationService authenticationService;
+        @MockitoBean
+        private AuthenticationService authenticationService;
 
-    @MockitoBean
-    private JwtAuthenticationFilter jwtAuthenticationFilter;
+        @MockitoBean
+        private JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    // ─── POST /auth/register ─────────────────────────────────────────────
+        // ─── POST /auth/register ─────────────────────────────────────────────
 
-    @Test
-    void register_ok_returns204() throws Exception {
-        RegisterRequest request = new RegisterRequest("alice", "alice@example.com", "secret");
+        @Test
+        void register_ok_returns204() throws Exception {
+                RegisterRequest request = new RegisterRequest("alice", "alice@example.com", "secret");
 
-        doNothing().when(authenticationService).register(any(RegisterRequest.class));
+                doNothing().when(authenticationService).register(any(RegisterRequest.class));
 
-        mockMvc.perform(post("/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNoContent());
-    }
+                mockMvc.perform(post("/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isNoContent());
+        }
 
-    @Test
-    void register_missingField_returns400() throws Exception {
-        // Bean Validation triggers MethodArgumentNotValidException
-        String body = """
-                {"username": "", "email": "alice@example.com", "password": "secret"}
-                """;
+        @Test
+        void register_missingField_returns400() throws Exception {
+                // Bean Validation triggers MethodArgumentNotValidException
+                String body = """
+                                {"username": "", "email": "alice@example.com", "password": "secret"}
+                                """;
 
-        mockMvc.perform(post("/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_ARGUMENTS.getCode()));
-    }
+                mockMvc.perform(post("/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_ARGUMENTS.getCode()));
+        }
 
-    @Test
-    void register_usernameExists_returns400() throws Exception {
-        RegisterRequest request = new RegisterRequest("alice", "alice@example.com", "secret");
+        @Test
+        void register_usernameExists_returns400() throws Exception {
+                RegisterRequest request = new RegisterRequest("alice", "alice@example.com", "secret");
 
-        doThrow(new WebException(ErrorCode.USER_EXISTS))
-                .when(authenticationService).register(any(RegisterRequest.class));
+                doThrow(new WebException(ErrorCode.USER_EXISTS))
+                                .when(authenticationService).register(any(RegisterRequest.class));
 
-        mockMvc.perform(post("/auth/register")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.USER_EXISTS.getCode()))
-                .andExpect(jsonPath("$.message").value(ErrorCode.USER_EXISTS.getErrorMessage()));
-    }
+                mockMvc.perform(post("/auth/register")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value(ErrorCode.USER_EXISTS.getCode()))
+                                .andExpect(jsonPath("$.message").value(ErrorCode.USER_EXISTS.getErrorMessage()));
+        }
 
-    // ─── POST /auth/login ────────────────────────────────────────────────
+        // ─── POST /auth/login ────────────────────────────────────────────────
 
-    @Test
-    void login_ok_returns200WithToken() throws Exception {
-        LoginRequest request = new LoginRequest("alice", "secret");
+        @Test
+        void login_ok_returns200WithToken() throws Exception {
+                LoginRequest request = new LoginRequest("alice", "secret");
 
-        AuthResponse authResponse = new AuthResponse(
-                "mock.jwt.token",
-                "mock.refresh.token",
-                "Bearer ",
-                3600L,
-                86400L,
-                1L,
-                "alice",
-                List.of("ROLE_USER"));
+                AuthResponse authResponse = new AuthResponse(
+                                "mock.jwt.token",
+                                "mock.refresh.token",
+                                "Bearer ",
+                                3600L,
+                                86400L,
+                                1L,
+                                "alice",
+                                List.of("ROLE_USER"));
 
-        when(authenticationService.login(any(LoginRequest.class))).thenReturn(authResponse);
+                when(authenticationService.login(any(LoginRequest.class))).thenReturn(authResponse);
 
-        mockMvc.perform(post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value(1000))
-                .andExpect(jsonPath("$.message").value("successful"))
-                .andExpect(jsonPath("$.data.accessToken").value("mock.jwt.token"))
-                .andExpect(jsonPath("$.data.username").value("alice"));
-    }
+                mockMvc.perform(post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.code").value(1000))
+                                .andExpect(jsonPath("$.message").value("successful"))
+                                .andExpect(jsonPath("$.data.accessToken").value("mock.jwt.token"))
+                                .andExpect(jsonPath("$.data.username").value("alice"));
+        }
 
-    @Test
-    void login_missingField_returns400() throws Exception {
-        // Bean Validation triggers MethodArgumentNotValidException
-        String body = """
-                {"username": "alice", "password": ""}
-                """;
+        @Test
+        void login_missingField_returns400() throws Exception {
+                // Bean Validation triggers MethodArgumentNotValidException
+                String body = """
+                                {"username": "alice", "password": ""}
+                                """;
 
-        mockMvc.perform(post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_ARGUMENTS.getCode()));
-    }
+                mockMvc.perform(post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_ARGUMENTS.getCode()));
+        }
 
-    @Test
-    void login_usernameNotFound_returns400() throws Exception {
-        LoginRequest request = new LoginRequest("ghost", "secret");
+        @Test
+        void login_usernameNotFound_returns400() throws Exception {
+                LoginRequest request = new LoginRequest("ghost", "secret");
 
-        when(authenticationService.login(any(LoginRequest.class)))
-                .thenThrow(new WebException(ErrorCode.USER_NOT_FOUND));
+                when(authenticationService.login(any(LoginRequest.class)))
+                                .thenThrow(new WebException(ErrorCode.USER_NOT_FOUND));
 
-        mockMvc.perform(post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value(ErrorCode.USER_NOT_FOUND.getCode()))
-                .andExpect(jsonPath("$.message").value(ErrorCode.USER_NOT_FOUND.getErrorMessage()));
-    }
+                mockMvc.perform(post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.code").value(ErrorCode.USER_NOT_FOUND.getCode()))
+                                .andExpect(jsonPath("$.message").value(ErrorCode.USER_NOT_FOUND.getErrorMessage()));
+        }
 
-    @Test
-    void login_passwordNotMatch_returns400() throws Exception {
-        LoginRequest request = new LoginRequest("alice", "wrongpass");
+        @Test
+        void login_passwordNotMatch_returns400() throws Exception {
+                LoginRequest request = new LoginRequest("alice", "wrongpass");
 
-        when(authenticationService.login(any(LoginRequest.class)))
-                .thenThrow(new WebException(ErrorCode.INVALID_CREDENTIALS));
+                when(authenticationService.login(any(LoginRequest.class)))
+                                .thenThrow(new WebException(ErrorCode.INVALID_CREDENTIALS));
 
-        mockMvc.perform(post("/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_CREDENTIALS.getCode()))
-                .andExpect(jsonPath("$.message").value(ErrorCode.INVALID_CREDENTIALS.getErrorMessage()));
-    }
+                mockMvc.perform(post("/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.code").value(ErrorCode.INVALID_CREDENTIALS.getCode()))
+                                .andExpect(jsonPath("$.message")
+                                                .value(ErrorCode.INVALID_CREDENTIALS.getErrorMessage()));
+        }
 }
