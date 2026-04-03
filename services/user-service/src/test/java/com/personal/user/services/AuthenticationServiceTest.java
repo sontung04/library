@@ -3,10 +3,13 @@ package com.personal.user.services;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -24,7 +27,9 @@ import com.personal.user.entities.User;
 import com.personal.user.enums.Role;
 import com.personal.user.exceptions.ErrorCode;
 import com.personal.user.exceptions.WebException;
+import com.personal.user.properties.JwtProperties;
 import com.personal.user.repositories.UserRepository;
+import com.personal.user.services.JwtService.TokenBundle;
 
 @ExtendWith(MockitoExtension.class)
 class AuthenticationServiceTest {
@@ -37,6 +42,15 @@ class AuthenticationServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private JwtProperties jwtProperties;
+
+    @Mock
+    private UserAuthCacheService userAuthCacheService;
+
+    @Mock
+    private TokenStateService tokenStateService;
 
     @InjectMocks
     private AuthenticationService authenticationService;
@@ -96,12 +110,16 @@ class AuthenticationServiceTest {
 
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("secret", "hashed")).thenReturn(true);
-        when(jwtService.mintToken("1", Arrays.asList(Role.ROLE_USER.toString()))).thenReturn("mock.jwt.token");
+        when(jwtProperties.userCacheTtlSeconds()).thenReturn(3600L);
+        when(jwtService.mintAccessToken(anyString(), anyList()))
+                .thenReturn(new TokenBundle("mock.jwt.access", "jti-access", Duration.ofSeconds(3600L)));
+        when(jwtService.mintRefreshToken(anyString()))
+                .thenReturn(new TokenBundle("mock.jwt.refresh", "jti-refresh", Duration.ofSeconds(86400L)));
 
         AuthResponse response = authenticationService.login(request);
 
         assertThat(response).isNotNull();
-        assertThat(response.token()).isEqualTo("mock.jwt.token");
+        assertThat(response.accessToken()).isEqualTo("mock.jwt.access");
         assertThat(response.username()).isEqualTo("alice");
     }
 

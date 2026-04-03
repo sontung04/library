@@ -90,8 +90,10 @@ class AuthenticationControllerTest {
 
         AuthResponse authResponse = new AuthResponse(
                 "mock.jwt.token",
+                "mock.refresh.token",
                 "Bearer ",
                 3600L,
+                86400L,
                 1L,
                 "alice",
                 List.of("ROLE_USER"));
@@ -104,7 +106,7 @@ class AuthenticationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(1000))
                 .andExpect(jsonPath("$.message").value("successful"))
-                .andExpect(jsonPath("$.data.token").value("mock.jwt.token"))
+                .andExpect(jsonPath("$.data.accessToken").value("mock.jwt.token"))
                 .andExpect(jsonPath("$.data.username").value("alice"));
     }
 
