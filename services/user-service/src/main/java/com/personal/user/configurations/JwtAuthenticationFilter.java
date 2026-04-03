@@ -26,21 +26,30 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserAuthCacheService userAuthCacheService;
     private final TokenStateService tokenStateService;
     private final JwtProperties jwtProperties;
+    private final boolean trustGatewayValidation;
 
-    @Value("${app.auth.trust-gateway-validation:false}")
-    private boolean trustGatewayValidation;
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            UserAuthCacheService userAuthCacheService,
+            TokenStateService tokenStateService,
+            JwtProperties jwtProperties,
+            @Value("${app.auth.trust-gateway-validation:false}") boolean trustGatewayValidation) {
+        this.jwtService = jwtService;
+        this.userAuthCacheService = userAuthCacheService;
+        this.tokenStateService = tokenStateService;
+        this.jwtProperties = jwtProperties;
+        this.trustGatewayValidation = trustGatewayValidation;
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {

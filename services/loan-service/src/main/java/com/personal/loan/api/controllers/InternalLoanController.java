@@ -12,17 +12,19 @@ import com.personal.loan.domain.exception.ErrorCode;
 import com.personal.loan.domain.exception.WebException;
 import com.personal.loan.domain.services.LoanService;
 
-import lombok.RequiredArgsConstructor;
-
 @RestController
 @RequestMapping("/internal/loans")
-@RequiredArgsConstructor
 public class InternalLoanController {
 
     private final LoanService loanService;
+    private final String internalApiKey;
 
-    @Value("${app.internal.api-key:library-internal-key}")
-    private String internalApiKey;
+    public InternalLoanController(
+            LoanService loanService,
+            @Value("${app.internal.api-key:library-internal-key}") String internalApiKey) {
+        this.loanService = loanService;
+        this.internalApiKey = internalApiKey;
+    }
 
     @GetMapping("/users/{userId}/active-exists")
     public ActiveLoanCheckResponse hasActiveLoans(
