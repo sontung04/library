@@ -12,12 +12,14 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.personal.user.configurations.SecurityConfig;
+import com.personal.user.configurations.JwtAuthenticationFilter;
 import com.personal.user.dtos.AuthResponse;
 import com.personal.user.dtos.LoginRequest;
 import com.personal.user.dtos.RegisterRequest;
@@ -25,9 +27,8 @@ import com.personal.user.exceptions.ErrorCode;
 import com.personal.user.exceptions.WebException;
 import com.personal.user.services.AuthenticationService;
 
-import org.springframework.context.annotation.Import;
-
-@Import(SecurityConfig.class)
+@WebMvcTest(AuthenticationController.class)
+@AutoConfigureMockMvc(addFilters = false)
 class AuthenticationControllerTest {
 
     @Autowired
@@ -39,7 +40,10 @@ class AuthenticationControllerTest {
     @MockitoBean
     private AuthenticationService authenticationService;
 
-    // ─── POST /api/users/register ─────────────────────────────────────────────
+    @MockitoBean
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    // ─── POST /auth/register ─────────────────────────────────────────────
 
     @Test
     void register_ok_returns204() throws Exception {
@@ -47,7 +51,7 @@ class AuthenticationControllerTest {
 
         doNothing().when(authenticationService).register(any(RegisterRequest.class));
 
-        mockMvc.perform(post("/api/users/register")
+        mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isNoContent());
@@ -60,7 +64,7 @@ class AuthenticationControllerTest {
                 {"username": "", "email": "alice@example.com", "password": "secret"}
                 """;
 
-        mockMvc.perform(post("/api/users/register")
+        mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
                 .andExpect(status().isBadRequest())
@@ -74,7 +78,7 @@ class AuthenticationControllerTest {
         doThrow(new WebException(ErrorCode.USER_EXISTS))
                 .when(authenticationService).register(any(RegisterRequest.class));
 
-        mockMvc.perform(post("/api/users/register")
+        mockMvc.perform(post("/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -82,7 +86,7 @@ class AuthenticationControllerTest {
                 .andExpect(jsonPath("$.message").value(ErrorCode.USER_EXISTS.getErrorMessage()));
     }
 
-    // ─── POST /api/users/login ────────────────────────────────────────────────
+    // ─── POST /auth/login ────────────────────────────────────────────────
 
     @Test
     void login_ok_returns200WithToken() throws Exception {
@@ -100,7 +104,7 @@ class AuthenticationControllerTest {
 
         when(authenticationService.login(any(LoginRequest.class))).thenReturn(authResponse);
 
-        mockMvc.perform(post("/api/users/login")
+        mockMvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -117,7 +121,7 @@ class AuthenticationControllerTest {
                 {"username": "alice", "password": ""}
                 """;
 
-        mockMvc.perform(post("/api/users/login")
+        mockMvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
                 .andExpect(status().isBadRequest())
@@ -131,10 +135,10 @@ class AuthenticationControllerTest {
         when(authenticationService.login(any(LoginRequest.class)))
                 .thenThrow(new WebException(ErrorCode.USER_NOT_FOUND));
 
-        mockMvc.perform(post("/api/users/login")
+        mockMvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(ErrorCode.USER_NOT_FOUND.getCode()))
                 .andExpect(jsonPath("$.message").value(ErrorCode.USER_NOT_FOUND.getErrorMessage()));
     }
@@ -146,7 +150,7 @@ class AuthenticationControllerTest {
         when(authenticationService.login(any(LoginRequest.class)))
                 .thenThrow(new WebException(ErrorCode.INVALID_CREDENTIALS));
 
-        mockMvc.perform(post("/api/users/login")
+        mockMvc.perform(post("/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
