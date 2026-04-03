@@ -391,16 +391,14 @@ function renderLoans(
             <p class="hint">Borrowed ${formatDate(loan.loanDate)} • Due ${formatDate(loan.dueDate)}</p>
             <p class="hint">Returned ${formatDate(loan.returnDate)}</p>
             <div class="loan-item-list">
-              ${loan.items
-                .map(
-                  (item) => `
+              ${loan.item
+                ? `
                     <div class="loan-item-row">
-                      <strong>${escapeHtml(item.book?.title ?? `Book ${item.bookId}`)}</strong>
-                      <span class="hint">${escapeHtml(item.book?.author ?? 'Unknown author')} • Qty ${item.amount}</span>
+                      <strong>${escapeHtml(loan.item.bookTitle || `Book ${loan.item.bookId}`)}</strong>
+                      <span class="hint">ISBN ${escapeHtml(loan.item.bookIsbn || 'Unknown')}</span>
                     </div>
-                  `,
-                )
-                .join('')}
+                  `
+                : '<div class="loan-item-row"><strong>Unknown book</strong></div>'}
             </div>
           </div>
           ${isLibrarian && loan.status === 'ACTIVE' ? `<div class="table-actions"><button type="button" data-return-loan-id="${loan.id}">${returnActionLabel}</button></div>` : ''}

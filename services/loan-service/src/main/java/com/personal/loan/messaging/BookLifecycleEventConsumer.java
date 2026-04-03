@@ -30,9 +30,10 @@ public class BookLifecycleEventConsumer {
     public void consume(String payload) {
         try {
             BookLifecycleEvent event = objectMapper.readValue(payload, BookLifecycleEvent.class);
-            if (event.deleted()) {
+            if (event.deleted()) 
                 loanService.applyBookDeletedEvent(event.bookId(), event.title(), event.isbn());
-            }
+            
+            log.info("Book event consumed.");
         } catch (Exception ex) {
             log.error("Failed to consume book-lifecycle event: {}", payload, ex);
         }

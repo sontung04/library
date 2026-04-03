@@ -50,14 +50,17 @@ export type Book = {
 
 export type LoanItem = {
   bookId: number;
-  amount: number;
-  book: Book | null;
+  bookTitle: string;
+  bookIsbn: string;
+  bookDeleted: boolean;
 };
 
 export type Loan = {
   id: number;
   userId: number;
-  items: LoanItem[];
+  userUsername?: string;
+  userDeleted?: boolean;
+  item: LoanItem | null;
   loanDate: string;
   dueDate: string;
   returnDate: string | null;

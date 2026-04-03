@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.personal.loan.api.dtos.BookDto;
 import com.personal.loan.api.dtos.CreateLoanRequest;
@@ -17,7 +18,6 @@ import com.personal.loan.domain.exception.ErrorCode;
 import com.personal.loan.domain.exception.WebException;
 import com.personal.loan.domain.repositories.LoanRepository;
 
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -34,71 +34,68 @@ public class LoanService {
     public LoanDto createLoan(Long userId, CreateLoanRequest request) {
         log.info("Executing LoanService::createLoan");
 
-        LoanItemDto item = new LoanItemDto(request.bookId(), "", "", false);
-
-        if (!checkBooksStatus(items))
-            throw new WebException(ErrorCode.INSUFFICIENT_BOOK_STOCK);
-
         BookDto book = bookClient.getBook(request.bookId());
-        if (book == null) {
+
+        if (!checkBooksAvailability(book))
             throw new WebException(ErrorCode.INSUFFICIENT_BOOK_STOCK);
-        }
+
+        LoanItemDto item = new LoanItemDto(
+                request.bookId(),
+                book.title(),
+                book.isbn(),
+                false);
+
+        subtractBookAmountFromDb(item, book);
+
         String username = userClient.getUsername(userId);
-
-        items.forEach(this::subtractBookAmountFromDb);
-
         Loan createdLoan = loanRepository.save(LoanMapper.toEntity(userId, username, request, book));
+        log.info("Loan created successfully: loanId={}, userId={}, bookId={}", createdLoan.getId(), userId,
+                request.bookId());
 
-        return enrichLoan(createdLoan);
+        return LoanMapper.toDto(createdLoan);
     }
 
-    private boolean checkBooksStatus(Long bookId) {
-        BookDto book = bookClient.getBook(bookId);
-        
+    private boolean checkBooksAvailability(BookDto book) {
+        if (book == null)
+            return false;
+        return book.availableCopies() > 0;
     }
 
-    private void subtractBookAmountFromDb(LoanItemDto item) {
-        BookDto book = bookClient.getBook(item.bookId());
-        int newAvailable = book.availableCopies() - item.amount();
-        bookClient.updateAvailability(item.bookId(), newAvailable);
+    private void subtractBookAmountFromDb(LoanItemDto item, BookDto currentBook) {
+        int newAvailableCopies = currentBook.availableCopies() - 1;
+        boolean stockUpdated = bookClient.updateAvailability(item.bookId(), newAvailableCopies);
+        if (!stockUpdated) {
+            throw new WebException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
     }
 
+    @Transactional(readOnly = true)
     public List<LoanDto> getUserLoans(Long userId) {
-        List<Loan> userLoans = retrieveUserLoansFromDb(userId);
+        List<Loan> userLoans = loanRepository.findByUserId(userId);
 
         if (userLoans.isEmpty())
             return Collections.emptyList();
 
         return userLoans.stream()
-                .map(this::enrichLoan)
+                .map(LoanMapper::toDto)
                 .toList();
     }
 
-    public List<LoanDto> getLoansByUserId(Long userId) {
-        return getUserLoans(userId);
-    }
-
+    @Transactional(readOnly = true)
     public boolean hasActiveLoans(Long userId) {
         return loanRepository.existsByUserIdAndStatus(userId, LoanStatus.ACTIVE);
     }
 
-    private List<Loan> retrieveUserLoansFromDb(Long userId) {
-        return loanRepository.findByUserId(userId);
-    }
-
+    @Transactional(readOnly = true)
     public List<LoanDto> getAllLoans() {
-        List<Loan> loans = retrieveAllLoansFromDb();
+        List<Loan> loans = loanRepository.findAll();
 
         if (loans.isEmpty())
             return Collections.emptyList();
 
         return loans.stream()
-                .map(this::enrichLoan)
+                .map(LoanMapper::toDto)
                 .toList();
-    }
-
-    private List<Loan> retrieveAllLoansFromDb() {
-        return loanRepository.findAll();
     }
 
     @Transactional
@@ -116,31 +113,7 @@ public class LoanService {
         loan.setStatus(LoanStatus.RETURNED);
         loan.setReturnDate(LocalDate.now());
 
-        return enrichLoan(loanRepository.save(loan));
-    }
-
-    private LoanDto enrichLoan(Loan loan) {
-        LoanDto baseLoan = LoanMapper.toDto(loan);
-        List<LoanItemDto> enrichedItems = baseLoan.items().stream()
-                .map(item -> new LoanItemDto(
-                        item.bookId(),
-                        item.bookTitle(),
-                        item.bookIsbn(),
-                        item.bookDeleted(),
-                        item.amount(),
-                        item.bookDeleted() ? null : bookClient.getBook(item.bookId())))
-                .toList();
-
-        return new LoanDto(
-                baseLoan.id(),
-                baseLoan.userId(),
-                baseLoan.userUsername(),
-                baseLoan.userDeleted(),
-                enrichedItems,
-                baseLoan.loanDate(),
-                baseLoan.dueDate(),
-                baseLoan.returnDate(),
-                baseLoan.status());
+        return LoanMapper.toDto(loanRepository.save(loan));
     }
 
     @Transactional
@@ -167,7 +140,10 @@ public class LoanService {
     private void restoreBookStock(Long bookId) {
         BookDto book = bookClient.getBook(bookId);
         if (book != null) {
-            bookClient.updateAvailability(bookId, book.availableCopies() + 1);
+            boolean stockUpdated = bookClient.updateAvailability(bookId, book.availableCopies() + 1);
+            if (!stockUpdated) {
+                log.warn("Failed to restore stock for bookId={} after return", bookId);
+            }
         }
     }
 }

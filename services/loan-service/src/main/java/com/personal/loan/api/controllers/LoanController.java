@@ -61,7 +61,7 @@ public class LoanController {
     @PreAuthorize("hasRole('LIBRARIAN')")
     @ResponseStatus(HttpStatus.OK)
     public ApiResponse<List<LoanDto>> getLoansByUserId(@PathVariable Long userId) {
-        return new ApiResponse<>(loanService.getLoansByUserId(userId));
+        return new ApiResponse<>(loanService.getUserLoans(userId));
     }
 
     @PatchMapping("/{id}/return")

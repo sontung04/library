@@ -31,6 +31,7 @@ public class UserLifecycleEventConsumer {
         try {
             UserLifecycleEvent event = objectMapper.readValue(payload, UserLifecycleEvent.class);
             loanService.applyUserLifecycleEvent(event.userId(), event.username(), event.deleted());
+            log.info("User event consumed.");
         } catch (Exception ex) {
             log.error("Failed to consume user-lifecycle event: {}", payload, ex);
         }
