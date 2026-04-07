@@ -32,6 +32,12 @@ public class BookService {
         this.bookLifecycleEventPublisher = bookLifecycleEventPublisher;
     }
 
+    /**
+     * Returns all books in the catalogue.
+     *
+     * @return a list of {@link BookDto} for every book; empty if the catalogue is
+     *         empty
+     */
     @Transactional(readOnly = true)
     public List<BookDto> getAllBook() {
         return bookRepository
@@ -41,6 +47,14 @@ public class BookService {
                 .toList();
     }
 
+    /**
+     * Returns a single book by its ID.
+     *
+     * @param id the ID of the book to retrieve
+     * @return the matching {@link BookDto}
+     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if no book exists
+     *                      for the given ID
+     */
     @Transactional(readOnly = true)
     public BookDto getBook(Long id) {
         Book book = bookRepository.findById(id)
@@ -49,6 +63,13 @@ public class BookService {
         return BookMapper.toDto(book);
     }
 
+    /**
+     * Adds a new book to the catalogue.
+     *
+     * @param request the creation payload containing title, author, ISBN, category,
+     *                and copy counts
+     * @return a {@link BookDto} representing the newly persisted book
+     */
     @Transactional
     public BookDto createNewBook(CreateBookRequest request) {
 
@@ -59,6 +80,17 @@ public class BookService {
         return BookMapper.toDto(createdBook);
     }
 
+    /**
+     * Directly sets the number of available copies for a book.
+     * Used internally by loan-service to decrement or restore stock without
+     * fetching the full entity.
+     *
+     * @param id      the ID of the book to update
+     * @param request the payload containing the new {@code availableCopies} value
+     * @return the updated {@link BookDto}
+     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if the book does
+     *                      not exist
+     */
     @Transactional
     public BookDto updateAvailability(Long id, UpdateAvailabilityRequest request) {
         Book book = bookRepository.findById(id)
@@ -67,6 +99,18 @@ public class BookService {
         return BookMapper.toDto(bookRepository.save(book));
     }
 
+    /**
+     * Increases both the total and available copy counts of a book by a given
+     * amount.
+     * Use this when new physical copies arrive; it adjusts both counters
+     * atomically.
+     *
+     * @param id      the ID of the book to restock
+     * @param request the payload containing {@code additionalCopies} to add
+     * @return the updated {@link BookDto} reflecting the new counts
+     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if the book does
+     *                      not exist
+     */
     @Transactional
     public BookDto increaseStock(Long id, IncreaseBookCopiesRequest request) {
         Book book = bookRepository.findById(id)
@@ -78,6 +122,18 @@ public class BookService {
         return BookMapper.toDto(bookRepository.save(book));
     }
 
+    /**
+     * Partially updates a book's metadata. Only non-{@code null} fields in the
+     * request are applied;
+     * omitted fields retain their current values.
+     *
+     * @param id      the ID of the book to update
+     * @param request the update payload (title, author, category, ISBN, totalCopies
+     *                — all optional)
+     * @return the updated {@link BookDto}
+     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if the book does
+     *                      not exist
+     */
     @Transactional
     public BookDto updateBook(Long id, UpdateBookRequest request) {
         Book book = bookRepository.findById(id)
@@ -95,6 +151,16 @@ public class BookService {
         return BookMapper.toDto(bookRepository.save(book));
     }
 
+    /**
+     * Permanently removes a book from the catalogue and publishes a
+     * {@code BookDeletedEvent}
+     * to Kafka so that loan-service can mark any historical loan records
+     * accordingly.
+     *
+     * @param id the ID of the book to delete
+     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if the book does
+     *                      not exist
+     */
     @Transactional
     public void deleteBook(Long id) {
         Book book = bookRepository.findById(id)

@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SecurityConfig {
 
     private static final String[] PUBLIC_REQUEST = { "/auth/**", "/internal/auth/**" };
+    private static final String[] MONITORING = {"/actuator/health", "/actuator/prometheus"};
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
@@ -36,7 +37,7 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(PUBLIC_REQUEST).permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers(MONITORING).permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex
                         .accessDeniedHandler((request, response, e) -> {

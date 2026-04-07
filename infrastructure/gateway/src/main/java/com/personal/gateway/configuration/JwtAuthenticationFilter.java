@@ -83,14 +83,14 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         String token = authHeader.substring(7);
 
         try {
-            Long userId = gatewayJwtService.extractSubjectWithoutValidation(token);
+            // Validate signature and token type FIRST — never trust Base64-only extraction
+            Claims claims = gatewayJwtService.validateAccessToken(token);
+            Long userId = Long.parseLong(claims.getSubject());
+            String jti = claims.getId();
 
             return gatewayUserAuthCacheService.readSnapshot(userId)
                     .switchIfEmpty(gatewayUserAuthClient.fetchAndCache(userId))
                     .flatMap(snapshot -> {
-                        Claims claims = gatewayJwtService.validateAccessToken(token);
-                        String jti = claims.getId();
-
                         Mono<Boolean> revokedCheck = jti == null
                                 ? Mono.just(false)
                                 : gatewayUserAuthCacheService.isJtiRevoked(jti);

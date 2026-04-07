@@ -45,44 +45,45 @@ public class AdminUserController {
         log.info("Retrieving all users.");
 
         return new ApiResponse<>(
-            1000, 
-            "Retrieved all users", 
-            userService.getAllUsers()); 
+                1000,
+                "Retrieved all users",
+                userService.getAllUsers());
     }
 
-    @GetMapping("/{id}") 
+    @GetMapping("/{id}")
     @ResponseStatus(HttpStatus.OK)
     public ApiResponse<UserDto> getUserInfo(@PathVariable Long id) {
         log.info("Running endpoint GET /api/admin/users/{}", id);
 
         return new ApiResponse<>(
-            1000,
-            String.format("User %d info retrieved", id),
-            userService.getUserInfo(id));
+                1000,
+                String.format("User %d info retrieved", id),
+                userService.getUserInfo(id));
     }
-    
+
     @PostMapping("/new")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UserDto> createUser(@Valid @RequestBody CreateUserRequest request) {
         log.info("Running endpoint POST /api/admin/users");
 
         return new ApiResponse<>(
-            1000, 
-            "user_created", 
-            userService.createUser(request));
+                1000,
+                "user_created",
+                userService.createUser(request));
     }
 
     @PutMapping("/{userId}")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UserDto> updateUser(
-            @PathVariable Long userId, 
-            @Valid @RequestBody UpdateUserRequest request) {
+            @PathVariable Long userId,
+            @Valid @RequestBody UpdateUserRequest request,
+            @RequestHeader("X-User-Id") Long currentAdminId) {
         log.info("Running endpoint PUT /api/admin/users/{}", userId);
 
         return new ApiResponse<>(
-            1000, 
-            "user_updated", 
-            userService.updateUser(userId, request));
+                1000,
+                "user_updated",
+                userService.updateUser(userId, request, currentAdminId));
     }
 
     @DeleteMapping("/{userId}")
@@ -95,9 +96,8 @@ public class AdminUserController {
         userService.deleteUser(userId);
 
         return new ApiResponse<>(
-            1000,
-            "user_deleted",
-            null
-        );
+                1000,
+                "user_deleted",
+                null);
     }
 }

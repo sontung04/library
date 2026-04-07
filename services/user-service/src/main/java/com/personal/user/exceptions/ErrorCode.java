@@ -8,7 +8,7 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum ErrorCode {
-    
+
     USER_EXISTS(1001, "User exists.", HttpStatus.BAD_REQUEST),
     USER_NOT_FOUND(1002, "User not found.", HttpStatus.NOT_FOUND),
     INVALID_CREDENTIALS(1003, "Invalid credentials.", HttpStatus.BAD_REQUEST),
@@ -17,9 +17,9 @@ public enum ErrorCode {
     INVALID_TOKEN(1006, "Invalid token", HttpStatus.UNAUTHORIZED),
     TOKEN_REVOKED(1007, "Token revoked", HttpStatus.UNAUTHORIZED),
     USER_HAS_ACTIVE_LOANS(1008, "User still has books not returned.", HttpStatus.CONFLICT),
+    CANNOT_DEMOTE_SELF(1009, "Admin cannot remove their own ROLE_ADMIN.", HttpStatus.BAD_REQUEST),
 
     UNCATEGORIZED_EXCEPTION(9999, "Uncategorized exception.", HttpStatus.INTERNAL_SERVER_ERROR);
-    
 
     private final int code;
     private final String errorMessage;

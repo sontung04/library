@@ -3,7 +3,7 @@ server:
 
 security:
   jwt:
-    secret: faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593
+    secret: ${JWT_SECRET:faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
 
 spring:
   main:
@@ -53,7 +53,7 @@ spring:
                 - Path=/api/users/**
               filters:
                 - StripPrefix=0
-            
+
             - id: user-service-admin
               uri: lb://user-service
               predicates:
@@ -85,11 +85,13 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 app:
   internal:
     api-key: ${INTERNAL_API_KEY:zvk93JOJEssmt82kQW+NEYQQFa2CAHUX5Mqnd1mA6yE=}
   auth:
     user-cache-ttl-seconds: 3600
-  

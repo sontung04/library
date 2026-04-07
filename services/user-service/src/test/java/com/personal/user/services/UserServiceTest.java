@@ -80,12 +80,13 @@ class UserServiceTest {
         when(passwordEncoder.encode("new-secret")).thenReturn("new-hash");
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        UserDto dto = userService.updateUser(1L, request);
+        UserDto dto = userService.updateUser(1L, request, 99L);
 
         assertThat(dto.getUsername()).isEqualTo("alice2");
         assertThat(dto.getRoles()).containsExactly(Role.ROLE_LIBRARIAN);
         verify(userAuthCacheService).evict(1L);
         verify(userLifecycleEventPublisher).publishUpdated(any(User.class));
+        verify(tokenStateService).clearActiveRefreshJti(1L);
     }
 
     @Test

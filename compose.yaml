@@ -25,6 +25,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-library-internal-key}
+      JWT_SECRET: ${JWT_SECRET:-faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
       interval: 15s
@@ -72,6 +73,7 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-library-internal-key}
+      JWT_SECRET: ${JWT_SECRET:-faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
       TRUST_GATEWAY_VALIDATION: ${TRUST_GATEWAY_VALIDATION:-false}
     depends_on:
       discovery-server:
@@ -226,6 +228,43 @@ services:
         condition: service_healthy
     networks:
       - library-net
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - library-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+    - "--config.file=/etc/prometheus/prometheus.yaml"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yaml:/etc/prometheus/prometheus.yaml
+    ports:
+      - "9090:9090"
+    networks:
+      - library-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - library-net
 
 networks:
   library-net:
@@ -234,3 +273,5 @@ networks:
 # For surviving container recreation
 volumes:
   redis-data:
+  grafana-data:
+  redisinsight-data:

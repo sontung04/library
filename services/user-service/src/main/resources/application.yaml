@@ -48,7 +48,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 app:
   internal:
@@ -57,7 +60,7 @@ app:
     trust-gateway-validation: ${TRUST_GATEWAY_VALIDATION:false}
   jwt:
     issuer: "user-service"
-    secret: faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593
+    secret: ${JWT_SECRET:faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
     access-expiration-seconds: 900
     refresh-expiration-seconds: 1209600
     user-cache-ttl-seconds: 3600

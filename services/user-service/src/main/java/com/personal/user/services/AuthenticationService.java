@@ -127,7 +127,12 @@ public class AuthenticationService {
                 .orElseThrow(() -> new WebException(ErrorCode.UNAUTHORIZED));
 
         if (!activeJti.equals(currentJti)) {
-            throw new WebException(ErrorCode.UNAUTHORIZED);
+            // Token theft suspected: a second party used the same refresh token family.
+            // Revoke the active session so neither party can continue.
+            tokenStateService.revokeJti(activeJti, Duration.ofSeconds(jwtProperties.refreshExpirationSeconds()));
+            tokenStateService.clearActiveRefreshJti(userId);
+            log.warn("SECURITY: Refresh token reuse detected for userId={}. Active session revoked.", userId);
+            throw new WebException(ErrorCode.TOKEN_REVOKED);
         }
 
         tokenStateService.revokeJti(currentJti, Duration.ofSeconds(jwtProperties.refreshExpirationSeconds()));
