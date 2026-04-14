@@ -48,18 +48,20 @@ export type Book = {
   totalCopies: number;
 };
 
+export type LoanUser = {
+  id: number;
+  username: string;
+};
+
 export type LoanItem = {
   bookId: number;
   bookTitle: string;
   bookIsbn: string;
-  bookDeleted: boolean;
 };
 
 export type Loan = {
   id: number;
-  userId: number;
-  userUsername?: string;
-  userDeleted?: boolean;
+  user: LoanUser | null;
   item: LoanItem | null;
   loanDate: string;
   dueDate: string;

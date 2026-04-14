@@ -3,6 +3,7 @@ package com.personal.loan.domain.services;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,12 +12,17 @@ import com.personal.loan.api.dtos.BookDto;
 import com.personal.loan.api.dtos.CreateLoanRequest;
 import com.personal.loan.api.dtos.LoanDto;
 import com.personal.loan.api.dtos.LoanItemDto;
+import com.personal.loan.api.mappers.BookMapper;
 import com.personal.loan.api.mappers.LoanMapper;
+import com.personal.loan.client.BookClient;
 import com.personal.loan.domain.entities.Loan;
 import com.personal.loan.domain.entities.LoanStatus;
+import com.personal.loan.domain.entities.User;
 import com.personal.loan.domain.exception.ErrorCode;
 import com.personal.loan.domain.exception.WebException;
+import com.personal.loan.domain.repositories.BookRepository;
 import com.personal.loan.domain.repositories.LoanRepository;
+import com.personal.loan.domain.repositories.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +34,8 @@ public class LoanService {
 
     private final LoanRepository loanRepository;
     private final BookClient bookClient;
-    private final UserClient userClient;
+    private final UserRepository userRepository;
+    private final BookRepository bookRepository;
 
     /**
      * Creates a new active loan for a user.
@@ -57,21 +64,35 @@ public class LoanService {
     public LoanDto createLoan(Long userId, CreateLoanRequest request) {
         log.info("Executing LoanService::createLoan");
 
-        BookDto book = bookClient.getBook(request.bookId());
+        BookDto bookDto;
+        try {
+            bookDto = bookRepository.findById(request.bookId())
+                    .map(BookMapper::toDto)
+                    .get();
+        } catch (NoSuchElementException e) {
+            log.info("Cannot find book {} from loan service's database.", request.bookId());
+            bookDto = bookClient.getBook(request.bookId());
+        }
 
-        if (!checkBooksAvailability(book))
+        if (!checkBooksAvailability(bookDto))
             throw new WebException(ErrorCode.INSUFFICIENT_BOOK_STOCK);
 
         LoanItemDto item = new LoanItemDto(
                 request.bookId(),
-                book.title(),
-                book.isbn(),
-                false);
+                bookDto.title(),
+                bookDto.isbn());
 
-        subtractBookAmountFromDb(item, book);
+        subtractBookAmountFromDb(item, bookDto);
 
-        String username = userClient.getUsername(userId);
-        Loan createdLoan = loanRepository.save(LoanMapper.toEntity(userId, username, request, book));
+        // Return null to username if user cannot be found
+        String username = userRepository.findById(userId)
+                .map(User::getUsername)
+                .orElseGet(() -> {
+                    log.info("Cannot find user with id = {}", userId);
+                    return null;
+                });
+
+        Loan createdLoan = loanRepository.save(LoanMapper.toEntity(userId, username, request, bookDto));
         log.info("Loan created successfully: loanId={}, userId={}, bookId={}", createdLoan.getId(), userId,
                 request.bookId());
 
@@ -180,33 +201,6 @@ public class LoanService {
     }
 
     /**
-     * Applies a user lifecycle event (update or deletion) to all of the user's loan
-     * snapshot records.
-     * Triggered by a Kafka {@code UserUpdatedEvent} or {@code UserDeletedEvent}
-     * consumed from user-service.
-     *
-     * <p>
-     * On update, the stored {@code userUsername} is refreshed to the new value.
-     * On deletion, {@code userDeleted} is flagged so that the loan history remains
-     * queryable
-     * without a foreign key back to user-service.
-     *
-     * @param userId   the ID of the affected user
-     * @param username the user's current (possibly new) username
-     * @param deleted  {@code true} if the user was deleted; {@code false} if only
-     *                 updated
-     */
-    @Transactional
-    public void applyUserLifecycleEvent(Long userId, String username, boolean deleted) {
-        List<Loan> loans = loanRepository.findByUserId(userId);
-        loans.forEach(loan -> {
-            loan.setUserUsername(username);
-            loan.setUserDeleted(deleted);
-        });
-        loanRepository.saveAll(loans);
-    }
-
-    /**
      * Applies a book deletion event to all loan records that reference the deleted
      * book.
      * Triggered by a Kafka {@code BookDeletedEvent} consumed from book-service.
@@ -222,17 +216,19 @@ public class LoanService {
      * @param isbn   the book's ISBN at the time of deletion
      */
     @Transactional
-    public void applyBookDeletedEvent(Long bookId, String title, String isbn) {
+    public void deleteBookId(Long bookId) {
         List<Loan> loans = loanRepository.findByBookId(bookId);
-        loans.forEach(loan -> {
-            loan.setBookTitle(title);
-            loan.setBookIsbn(isbn);
-            loan.setBookDeleted(true);
-        });
+        loans.forEach(loan -> loan.setBookId(null));
         loanRepository.saveAll(loans);
     }
 
     private void restoreBookStock(Long bookId) {
+
+        if (bookId == null) {
+            log.error("Trying to return an already deleted book");
+            return;
+        }
+
         BookDto book = bookClient.getBook(bookId);
         if (book != null) {
             boolean stockUpdated = bookClient.updateAvailability(bookId, book.availableCopies() + 1);
@@ -240,5 +236,11 @@ public class LoanService {
                 log.warn("Failed to restore stock for bookId={} after return", bookId);
             }
         }
+    }
+
+    public void deleteUserId(Long userId) {
+        List<Loan> loans = loanRepository.findByUserId(userId);
+        loans.forEach(loan -> loan.setUserId(null));
+        loanRepository.saveAll(loans);
     }
 }

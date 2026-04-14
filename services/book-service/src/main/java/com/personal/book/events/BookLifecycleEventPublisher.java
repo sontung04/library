@@ -4,7 +4,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.personal.book.domain.entities.Book;
+import com.personal.book.api.dtos.KafkaBookEventPayload;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,19 +19,25 @@ public class BookLifecycleEventPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private static final String TOPIC = "book-lifecycle";
 
     /**
-     * Publishes messages on book deletion.
+     * Publishes messages on book events.
      * 
-     * @param book book that has been deleted
+     * @param payload book info
      */
-    public void publishDeleted(Book book) {
+    public void publish(KafkaBookEventPayload payload, Action bookAction) {
         try {
-            String payload = objectMapper.writeValueAsString(
-                    new BookLifecycleEvent(book.getId(), book.getTitle(), book.getIsbn(), true));
-            kafkaTemplate.send("book-lifecycle", String.valueOf(book.getId()), payload);
+            String message = objectMapper.writeValueAsString(
+                    new BookLifecycleEvent(payload, bookAction));
+            kafkaTemplate.send(
+                TOPIC, 
+                String.valueOf(payload.id()), 
+                message);
+            
+            log.info("Book {} event has been sent with book id = {}", bookAction.name(), payload.id());
         } catch (Exception ex) {
-            log.error("Failed to publish book-lifecycle event for bookId={}", book.getId(), ex);
+            log.error("Failed to publish book-lifecycle event for bookId={}", payload.id(), ex);
         }
     }
 }

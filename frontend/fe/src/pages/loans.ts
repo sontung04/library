@@ -383,7 +383,7 @@ function renderLoans(
           <div class="row-between loan-card-header">
             <div>
               <p class="eyebrow">Loan #${loan.id}</p>
-              <h3>User ${loan.userId}</h3>
+              <h3>${escapeHtml(loan.user?.username ?? String(loan.user?.id ?? '—'))}</h3>
             </div>
             <span class="status-pill ${loan.status.toLowerCase()}">${escapeHtml(loan.status)}</span>
           </div>

@@ -11,10 +11,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "loans")
 @AllArgsConstructor
@@ -31,10 +33,6 @@ public class Loan {
     @Column(nullable = false)
     private String userUsername;
 
-    @Column(nullable = false)
-    private boolean userDeleted;
-
-    @Column(nullable = false)
     private Long bookId;
 
     @Column(nullable = false)
@@ -42,9 +40,6 @@ public class Loan {
 
     @Column(nullable = false)
     private String bookIsbn;
-
-    @Column(nullable = false)
-    private boolean bookDeleted;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

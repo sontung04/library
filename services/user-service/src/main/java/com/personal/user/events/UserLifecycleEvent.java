@@ -1,7 +1,8 @@
 package com.personal.user.events;
 
+import com.personal.user.dtos.KafkaUserEventPayload;
+
 public record UserLifecycleEvent(
-        Long userId,
-        String username,
-        boolean deleted) {
+    KafkaUserEventPayload payload,
+    Action userAction) {
 }

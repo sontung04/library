@@ -21,6 +21,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.personal.loan.api.dtos.BookDto;
 import com.personal.loan.api.dtos.CreateLoanRequest;
 import com.personal.loan.api.dtos.LoanDto;
+import com.personal.loan.client.BookClient;
+import com.personal.loan.client.UserClient;
 import com.personal.loan.domain.entities.Loan;
 import com.personal.loan.domain.entities.LoanStatus;
 import com.personal.loan.domain.exception.ErrorCode;

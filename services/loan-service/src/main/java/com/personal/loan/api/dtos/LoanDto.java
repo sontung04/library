@@ -6,9 +6,7 @@ import com.personal.loan.domain.entities.LoanStatus;
 
 public record LoanDto(
     Long id,
-    Long userId,
-    String userUsername,
-    boolean userDeleted,
+    UserDto user,
     LoanItemDto item,
     LocalDate loanDate,
     LocalDate dueDate,

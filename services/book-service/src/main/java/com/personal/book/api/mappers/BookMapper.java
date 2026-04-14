@@ -2,6 +2,7 @@ package com.personal.book.api.mappers;
 
 import com.personal.book.api.dtos.BookDto;
 import com.personal.book.api.dtos.CreateBookRequest;
+import com.personal.book.api.dtos.KafkaBookEventPayload;
 import com.personal.book.domain.entities.Book;
 
 public class BookMapper {
@@ -49,5 +50,13 @@ public class BookMapper {
         book.setTotalCopies(request.copies().intValue());
         book.setAvailableCopies(request.copies().intValue());
         return book;
+    }
+
+    public static KafkaBookEventPayload toKafkaPayload(Book book) {
+        return new KafkaBookEventPayload(
+                book.getId(),
+                book.getTitle(),
+                book.getIsbn(),
+                book.getAvailableCopies());
     }
 }

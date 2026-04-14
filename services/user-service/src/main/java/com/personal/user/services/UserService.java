@@ -14,6 +14,8 @@ import com.personal.user.enums.Role;
 import com.personal.user.exceptions.ErrorCode;
 import com.personal.user.exceptions.WebException;
 import com.personal.user.repositories.UserRepository;
+import com.personal.user.utils.UserMapper;
+import com.personal.user.events.Action;
 import com.personal.user.events.UserLifecycleEventPublisher;
 
 import lombok.RequiredArgsConstructor;
@@ -65,7 +67,7 @@ public class UserService {
     }
 
     /**
-     * Creates a new user account from an admin-supplied request.
+     * Creates a new user account from an admin-supplied request and publish user creation event on kafka.
      * The password is BCrypt-hashed before persistence.
      * If {@code request.roles()} is {@code null}, the account defaults to
      * {@link Role#ROLE_USER}.
@@ -87,11 +89,15 @@ public class UserService {
                 newUser.getId(),
                 newUser.getUsername(),
                 newUser.getEmail());
+        
+        // Publish user creation event on kafka
+        userLifecycleEventPublisher.publish(UserMapper.toKafkaPayload(newUser), Action.CREATE);
+
         return UserDto.fromEntity(newUser);
     }
 
     /**
-     * Updates an existing user's profile and, optionally, their roles.
+     * Updates an existing user's profile and, optionally, their roles, then publish user update on kafka.
      *
      * <p>
      * Business rules enforced:
@@ -145,19 +151,22 @@ public class UserService {
 
         User updatedUser = userRepository.save(user);
         userAuthCacheService.evict(updatedUser.getId());
-        userLifecycleEventPublisher.publishUpdated(updatedUser);
-
+        
         if (!newRoles.equals(oldRoles)) {
             log.info("AUDIT: Admin {} changed roles of user {} from {} to {}",
-                    currentAdminId, userId, oldRoles, newRoles);
+            currentAdminId, userId, oldRoles, newRoles);
             // Force the target user to re-authenticate with their new roles
             tokenStateService.clearActiveRefreshJti(userId);
         }
-
+        
         log.info("A user has been updated. User id: {}, username: {}, email: {}",
                 updatedUser.getId(),
                 updatedUser.getUsername(),
                 updatedUser.getEmail());
+
+        // Publish user update on kafka
+        userLifecycleEventPublisher.publish(UserMapper.toKafkaPayload(updatedUser), Action.UPDATE);
+
         return UserDto.fromEntity(updatedUser);
     }
 
@@ -192,7 +201,9 @@ public class UserService {
         userRepository.delete(user);
         userAuthCacheService.evict(userId);
         tokenStateService.clearActiveRefreshJti(userId);
-        userLifecycleEventPublisher.publishDeleted(user);
+
+        // Publish user deletion on kafka.
+        userLifecycleEventPublisher.publish(UserMapper.toKafkaPayload(user), Action.DELETE);
     }
 
     /**

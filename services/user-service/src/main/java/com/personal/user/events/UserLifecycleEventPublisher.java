@@ -4,7 +4,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.personal.user.entities.User;
+import com.personal.user.dtos.KafkaUserEventPayload;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,32 +19,26 @@ public class UserLifecycleEventPublisher {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private static final String TOPIC = "user-lifecycle";
 
     /**
-     * Publish messages on user update
+     * Publish user-lifecycle events 
      * 
-     * @param user User info that other services need to update.
+     * @param user User payload that other services need in order to process.
      */
-    public void publishUpdated(User user) {
-        publish(user, false);
-    }
-
-    /**
-     * Publish messages on user deletion
-     * 
-     * @param user User info that other services need to update.
-     */
-    public void publishDeleted(User user) {
-        publish(user, true);
-    }
-
-    private void publish(User user, boolean deleted) {
+    public void publish(KafkaUserEventPayload payload, Action userAction) {
         try {
-            String payload = objectMapper.writeValueAsString(
-                    new UserLifecycleEvent(user.getId(), user.getUsername(), deleted));
-            kafkaTemplate.send("user-lifecycle", String.valueOf(user.getId()), payload);
+            String message = objectMapper.writeValueAsString(
+                    new UserLifecycleEvent(payload, userAction));
+
+            kafkaTemplate.send(
+                TOPIC, 
+                String.valueOf(payload.id()), 
+                message);
+            
+            log.info("User {} event has been sent with id = {}", userAction.name(), payload.id());
         } catch (Exception ex) {
-            log.error("Failed to publish user-lifecycle event for userId={}", user.getId(), ex);
+            log.error("Failed to publish user-lifecycle event for userId={}", payload.id(), ex);
         }
     }
 }

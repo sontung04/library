@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.time.Duration;
 import java.util.List;
 
-import org.springframework.http.HttpHeaders;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +37,7 @@ public class AuthenticationService {
     private final JwtProperties jwtProperties;
     private final UserAuthCacheService userAuthCacheService;
     private final TokenStateService tokenStateService;
+    private static final String BEARER_TOKEN_TYPE = "Bearer ";
 
     @Transactional
     public void register(RegisterRequest request) throws WebException {
@@ -102,7 +102,7 @@ public class AuthenticationService {
         return new AuthResponse(
                 access.token(),
                 refresh.token(),
-                "Bearer ",
+                BEARER_TOKEN_TYPE,
                 access.ttl().getSeconds(),
                 refresh.ttl().getSeconds(),
                 user.getId(),
@@ -144,7 +144,7 @@ public class AuthenticationService {
         return new AuthResponse(
                 newAccess.token(),
                 newRefresh.token(),
-                "Bearer ",
+                BEARER_TOKEN_TYPE,
                 newAccess.ttl().getSeconds(),
                 newRefresh.ttl().getSeconds(),
                 snapshot.userId(),
@@ -166,7 +166,7 @@ public class AuthenticationService {
         }
         tokenStateService.clearActiveRefreshJti(userId);
 
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
+        if (authorizationHeader != null && authorizationHeader.startsWith(BEARER_TOKEN_TYPE)) {
             String accessToken = authorizationHeader.substring(7);
             Claims accessClaims = jwtService.validateToken(accessToken, JwtService.TOKEN_TYPE_ACCESS);
             String accessJti = accessClaims.getId();

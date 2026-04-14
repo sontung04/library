@@ -15,6 +15,7 @@ import com.personal.book.domain.entities.Book;
 import com.personal.book.domain.exception.ErrorCode;
 import com.personal.book.domain.exception.WebException;
 import com.personal.book.domain.repositories.BookRepository;
+import com.personal.book.events.Action;
 import com.personal.book.events.BookLifecycleEventPublisher;
 
 import lombok.extern.slf4j.Slf4j;
@@ -76,7 +77,8 @@ public class BookService {
         Book book = BookMapper.toEntity(request);
         Book createdBook = bookRepository.save(book);
 
-        log.info("Book created.");
+        bookLifecycleEventPublisher.publish(BookMapper.toKafkaPayload(createdBook), Action.CREATE);
+        log.info("Book created with id = {}.", createdBook.getId());
         return BookMapper.toDto(createdBook);
     }
 
@@ -148,6 +150,10 @@ public class BookService {
             book.setIsbn(request.isbn());
         if (request.totalCopies() != null)
             book.setTotalCopies(request.totalCopies());
+
+        bookLifecycleEventPublisher.publish(
+                BookMapper.toKafkaPayload(book), 
+                Action.DELETE);
         return BookMapper.toDto(bookRepository.save(book));
     }
 
@@ -166,7 +172,9 @@ public class BookService {
         Book book = bookRepository.findById(id)
                 .orElseThrow(() -> new WebException(ErrorCode.BOOK_NOT_FOUND));
         bookRepository.delete(book);
-        bookLifecycleEventPublisher.publishDeleted(book);
+        bookLifecycleEventPublisher.publish(
+                BookMapper.toKafkaPayload(book), 
+                Action.DELETE);
         log.info("Book {} deleted.", id);
     }
 }

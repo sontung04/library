@@ -1,4 +1,4 @@
-package com.personal.loan.domain.services;
+package com.personal.loan.client;
 
 import java.util.List;
 

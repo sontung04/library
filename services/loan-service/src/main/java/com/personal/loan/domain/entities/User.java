@@ -1,5 +1,6 @@
 package com.personal.loan.domain.entities;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -8,18 +9,17 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "books")
 @Data
-@NoArgsConstructor
+@Table(name = "users")
 @AllArgsConstructor
-public class Book {
-
+@NoArgsConstructor
+public class User {
+    
     @Id
-    private Long id;
+    Long id;
 
-    private String title;
+    @Column(nullable = false)
+    String username;
 
-    private String isbn;
-
-    private int availableCopies;
+    String email;
 }

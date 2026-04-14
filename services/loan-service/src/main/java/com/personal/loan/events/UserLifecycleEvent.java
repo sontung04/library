@@ -1,7 +1,8 @@
 package com.personal.loan.events;
 
+import com.personal.loan.api.dtos.KafkaUserEventPayload;
+
 public record UserLifecycleEvent(
-        Long userId,
-        String username,
-        boolean deleted) {
+        KafkaUserEventPayload payload,
+        UserAction userAction) {
 }

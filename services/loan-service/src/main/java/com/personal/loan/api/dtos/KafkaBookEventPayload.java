@@ -1,6 +1,6 @@
 package com.personal.loan.api.dtos;
 
-public record BookDto(
+public record KafkaBookEventPayload(
         Long id,
         String title,
         String isbn,

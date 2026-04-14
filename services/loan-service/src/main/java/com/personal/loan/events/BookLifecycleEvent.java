@@ -1,8 +1,8 @@
 package com.personal.loan.events;
 
+import com.personal.loan.api.dtos.KafkaBookEventPayload;
+
 public record BookLifecycleEvent(
-        Long bookId,
-        String title,
-        String isbn,
-        boolean deleted) {
+        KafkaBookEventPayload payload,
+        BookAction bookAction) {
 }

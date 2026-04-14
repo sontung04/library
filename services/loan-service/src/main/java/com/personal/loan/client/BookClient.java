@@ -1,4 +1,4 @@
-package com.personal.loan.domain.services;
+package com.personal.loan.client;
 
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.core.ParameterizedTypeReference;
@@ -24,6 +24,8 @@ public class BookClient {
     }
 
     public BookDto getBook(Long bookId) {
+        log.info("Finding book {} in book service.", bookId);
+        
         try {
             ApiResponse<BookDto> response = restClient.get()
                     .uri("/api/books/{id}", bookId)
