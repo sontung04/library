@@ -45,21 +45,17 @@ public class BookClient {
         }
     }
 
-    public boolean updateAvailability(Long bookId, int newAvailableCopies) {
+    public boolean loanBook(Long bookId) {
         try {
-            restClient.patch()
-                    .uri("/api/books/{id}/availability", bookId)
-                    .body(new UpdateAvailabilityRequest(newAvailableCopies))
+            restClient.post()
+                    .uri("/internal/api/books/{bookId}/loan", bookId)
                     .retrieve()
                     .toBodilessEntity();
-            log.debug("Updated availability for book {} to {}", bookId, newAvailableCopies);
+            log.info("Successfully loan book {}", bookId);
             return true;
         } catch (RestClientException e) {
-            log.error("Failed to update availability for book {} in book-service", bookId, e);
+            log.error("Failed to process loan book {} in book-service", bookId, e);
             return false;
         }
-    }
-
-    private record UpdateAvailabilityRequest(int availableCopies) {
     }
 }

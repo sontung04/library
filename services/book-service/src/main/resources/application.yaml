@@ -50,3 +50,7 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+app:
+  outbox:
+    relay:
+      fixed-delay-ms: 5000

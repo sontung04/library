@@ -13,7 +13,9 @@ public enum ErrorCode {
     INVALID_ARGUMENTS(1004, "Invalid arguments.", HttpStatus.BAD_REQUEST),
     INSUFFICIENT_BOOK_STOCK(1301, "Not enough copies available", HttpStatus.CONFLICT),
     LOAN_NOT_FOUND(1302, "Loan not found.", HttpStatus.NOT_FOUND),
-    LOAN_NOT_ACTIVE(1303, "Loan is not active.", HttpStatus.CONFLICT),
+    LOAN_ALREADY_RETURNED(1303, "Loan is already returned.", HttpStatus.CONFLICT),
+    BOOK_NOT_FOUND(1304, "Book is not found.", HttpStatus.NOT_FOUND),
+    USER_NOT_FOUND(1305, "User is not found.", HttpStatus.NOT_FOUND),
     UNCATEGORIZED_EXCEPTION(9999, "Uncategorized exception.", HttpStatus.INTERNAL_SERVER_ERROR);
 
     private final int code;

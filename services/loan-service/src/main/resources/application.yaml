@@ -1,5 +1,6 @@
 server:
   port: 8083
+
 spring:
   application:
     name: loan-service
@@ -12,6 +13,9 @@ spring:
       port: 6379
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
       group-id: ${spring.application.name}
       auto-offset-reset: earliest
@@ -57,3 +61,6 @@ management:
 app:
   internal:
     api-key: ${INTERNAL_API_KEY:library-internal-key}
+  outbox:
+    relay:
+      fixed-delay-ms: 5000

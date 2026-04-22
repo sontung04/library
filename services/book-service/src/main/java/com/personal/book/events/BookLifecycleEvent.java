@@ -4,5 +4,5 @@ import com.personal.book.api.dtos.KafkaBookEventPayload;
 
 public record BookLifecycleEvent(
     KafkaBookEventPayload payload,
-    Action bookAction) {
+    LifecycleAction bookAction) {
 }

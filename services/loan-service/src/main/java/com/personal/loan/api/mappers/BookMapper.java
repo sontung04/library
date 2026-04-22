@@ -27,4 +27,8 @@ public class BookMapper {
                 book.getIsbn(),
                 book.getAvailableCopies());
     }
+
+    public static Book toEntity(BookDto bookDto) {
+        return new Book(bookDto.id(), bookDto.title(), bookDto.isbn(), bookDto.availableCopies());
+    }
 }

@@ -12,20 +12,21 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.personal.user.dtos.CreateUserRequest;
 import com.personal.user.dtos.UpdateUserRequest;
 import com.personal.user.dtos.UserDto;
 import com.personal.user.entities.User;
 import com.personal.user.enums.Role;
-import com.personal.user.events.UserLifecycleEventPublisher;
 import com.personal.user.exceptions.ErrorCode;
 import com.personal.user.exceptions.WebException;
+import com.personal.user.outbox.KafkaOutboxEvent;
+import com.personal.user.outbox.KafkaOutboxEventRepository;
 import com.personal.user.repositories.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,7 +48,10 @@ class UserServiceTest {
     private LoanClient loanClient;
 
     @Mock
-    private UserLifecycleEventPublisher userLifecycleEventPublisher;
+    private KafkaOutboxEventRepository outboxRepository;
+
+    @Mock
+    private ObjectMapper objectMapper;
 
     @InjectMocks
     private UserService userService;
@@ -85,7 +89,7 @@ class UserServiceTest {
         assertThat(dto.getUsername()).isEqualTo("alice2");
         assertThat(dto.getRoles()).containsExactly(Role.ROLE_LIBRARIAN);
         verify(userAuthCacheService).evict(1L);
-        verify(userLifecycleEventPublisher).publishUpdated(any(User.class));
+        verify(outboxRepository).save(any(KafkaOutboxEvent.class));
         verify(tokenStateService).clearActiveRefreshJti(1L);
     }
 
@@ -99,7 +103,7 @@ class UserServiceTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_HAS_ACTIVE_LOANS);
         verify(userRepository, never()).delete(any(User.class));
-        verify(userLifecycleEventPublisher, never()).publishDeleted(any(User.class));
+        verify(outboxRepository, never()).save(any(KafkaOutboxEvent.class));
     }
 
     @Test
@@ -113,10 +117,7 @@ class UserServiceTest {
         verify(userRepository).delete(existing);
         verify(userAuthCacheService).evict(1L);
         verify(tokenStateService).clearActiveRefreshJti(1L);
-
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userLifecycleEventPublisher).publishDeleted(userCaptor.capture());
-        assertThat(userCaptor.getValue().getId()).isEqualTo(1L);
+        verify(outboxRepository).save(any(KafkaOutboxEvent.class));
     }
 
     @Test

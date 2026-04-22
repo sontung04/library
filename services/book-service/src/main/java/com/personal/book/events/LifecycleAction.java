@@ -1,6 +1,6 @@
 package com.personal.book.events;
 
-public enum Action {
+public enum LifecycleAction {
     CREATE,
     UPDATE,
     DELETE

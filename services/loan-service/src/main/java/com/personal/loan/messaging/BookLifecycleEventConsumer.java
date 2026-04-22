@@ -22,7 +22,7 @@ public class BookLifecycleEventConsumer {
     private final BookService bookService;
 
     /**
-     * Consumes book deletion events
+     * Consumes book lifecycle events
      * 
      * @param payload
      */
@@ -45,7 +45,7 @@ public class BookLifecycleEventConsumer {
                     break;
             }
 
-            log.info("Book event consumed.");
+            log.info("Book lifecycle event consumed.");
         } catch (Exception ex) {
             log.error("Failed to consume book-lifecycle event: {}", payload, ex);
         }

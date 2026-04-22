@@ -17,7 +17,6 @@ import com.personal.book.api.dtos.ApiResponse;
 import com.personal.book.api.dtos.BookDto;
 import com.personal.book.api.dtos.CreateBookRequest;
 import com.personal.book.api.dtos.IncreaseBookCopiesRequest;
-import com.personal.book.api.dtos.UpdateAvailabilityRequest;
 import com.personal.book.api.dtos.UpdateBookRequest;
 import com.personal.book.domain.services.BookService;
 
@@ -61,14 +60,6 @@ public class BookController {
                 request.copies().intValue());
 
         return ResponseEntity.ok(new ApiResponse<>(bookService.createNewBook(request)));
-    }
-
-    @PatchMapping("/{id}/availability")
-    public ResponseEntity<ApiResponse<BookDto>> updateAvailability(
-            @PathVariable Long id,
-            @RequestBody UpdateAvailabilityRequest request) {
-        log.info("Call PATCH /api/books/{}/availability", id);
-        return ResponseEntity.ok(new ApiResponse<>(bookService.updateAvailability(id, request)));
     }
 
     @PatchMapping("/{id}/stock")

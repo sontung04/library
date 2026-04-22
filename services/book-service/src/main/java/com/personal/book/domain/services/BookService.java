@@ -8,29 +8,41 @@ import org.springframework.transaction.annotation.Transactional;
 import com.personal.book.api.dtos.BookDto;
 import com.personal.book.api.dtos.CreateBookRequest;
 import com.personal.book.api.dtos.IncreaseBookCopiesRequest;
-import com.personal.book.api.dtos.UpdateAvailabilityRequest;
 import com.personal.book.api.dtos.UpdateBookRequest;
 import com.personal.book.api.mappers.BookMapper;
 import com.personal.book.domain.entities.Book;
 import com.personal.book.domain.exception.ErrorCode;
 import com.personal.book.domain.exception.WebException;
 import com.personal.book.domain.repositories.BookRepository;
-import com.personal.book.events.Action;
-import com.personal.book.events.BookLifecycleEventPublisher;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.personal.book.events.BookLifecycleEvent;
+import com.personal.book.events.LifecycleAction;
+import com.personal.book.outbox.KafkaOutboxEvent;
+import com.personal.book.outbox.KafkaOutboxEventRepository;
+import com.personal.book.api.dtos.KafkaBookEventPayload;
+import com.personal.book.idempotency.ProcessedEvent;
+import com.personal.book.idempotency.ProcessedEventRepository;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-public class BookService {
+public class BookService implements BookAvailabilityEventHandler {
+
+    private static final String BOOK_LIFECYCLE_TOPIC = "book-lifecycle";
 
     private final BookRepository bookRepository;
-    private final BookLifecycleEventPublisher bookLifecycleEventPublisher;
+    private final KafkaOutboxEventRepository outboxRepository;
+    private final ObjectMapper objectMapper;
+    private final ProcessedEventRepository processedEventRepository;
 
     public BookService(BookRepository bookRepository,
-            BookLifecycleEventPublisher bookLifecycleEventPublisher) {
+            KafkaOutboxEventRepository outboxRepository,
+            ObjectMapper objectMapper,
+            ProcessedEventRepository processedEventRepository) {
         this.bookRepository = bookRepository;
-        this.bookLifecycleEventPublisher = bookLifecycleEventPublisher;
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
+        this.processedEventRepository = processedEventRepository;
     }
 
     /**
@@ -77,28 +89,9 @@ public class BookService {
         Book book = BookMapper.toEntity(request);
         Book createdBook = bookRepository.save(book);
 
-        bookLifecycleEventPublisher.publish(BookMapper.toKafkaPayload(createdBook), Action.CREATE);
+        saveOutboxEvent(BookMapper.toKafkaPayload(createdBook), LifecycleAction.CREATE);
         log.info("Book created with id = {}.", createdBook.getId());
         return BookMapper.toDto(createdBook);
-    }
-
-    /**
-     * Directly sets the number of available copies for a book.
-     * Used internally by loan-service to decrement or restore stock without
-     * fetching the full entity.
-     *
-     * @param id      the ID of the book to update
-     * @param request the payload containing the new {@code availableCopies} value
-     * @return the updated {@link BookDto}
-     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if the book does
-     *                      not exist
-     */
-    @Transactional
-    public BookDto updateAvailability(Long id, UpdateAvailabilityRequest request) {
-        Book book = bookRepository.findById(id)
-                .orElseThrow(() -> new WebException(ErrorCode.BOOK_NOT_FOUND));
-        book.setAvailableCopies(request.availableCopies());
-        return BookMapper.toDto(bookRepository.save(book));
     }
 
     /**
@@ -121,7 +114,9 @@ public class BookService {
         int additionalCopies = request.additionalCopies();
         book.setAvailableCopies(book.getAvailableCopies() + additionalCopies);
         book.setTotalCopies(book.getTotalCopies() + additionalCopies);
-        return BookMapper.toDto(bookRepository.save(book));
+        Book savedBook = bookRepository.save(book);
+        saveOutboxEvent(BookMapper.toKafkaPayload(savedBook), LifecycleAction.UPDATE);
+        return BookMapper.toDto(savedBook);
     }
 
     /**
@@ -151,10 +146,9 @@ public class BookService {
         if (request.totalCopies() != null)
             book.setTotalCopies(request.totalCopies());
 
-        bookLifecycleEventPublisher.publish(
-                BookMapper.toKafkaPayload(book), 
-                Action.DELETE);
-        return BookMapper.toDto(bookRepository.save(book));
+        Book savedBook = bookRepository.save(book);
+        saveOutboxEvent(BookMapper.toKafkaPayload(savedBook), LifecycleAction.UPDATE);
+        return BookMapper.toDto(savedBook);
     }
 
     /**
@@ -171,10 +165,65 @@ public class BookService {
     public void deleteBook(Long id) {
         Book book = bookRepository.findById(id)
                 .orElseThrow(() -> new WebException(ErrorCode.BOOK_NOT_FOUND));
+
+        saveOutboxEvent(BookMapper.toKafkaPayload(book), LifecycleAction.DELETE);
         bookRepository.delete(book);
-        bookLifecycleEventPublisher.publish(
-                BookMapper.toKafkaPayload(book), 
-                Action.DELETE);
+
         log.info("Book {} deleted.", id);
+    }
+
+    private void saveOutboxEvent(KafkaBookEventPayload payload, LifecycleAction action) {
+        try {
+            String message = objectMapper.writeValueAsString(new BookLifecycleEvent(payload, action));
+            outboxRepository.save(new KafkaOutboxEvent(BOOK_LIFECYCLE_TOPIC, String.valueOf(payload.id()), message));
+        } catch (Exception e) {
+            log.error("Failed to serialize outbox event for bookId={}, action={}", payload.id(), action, e);
+            throw new WebException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void handleLoanEvent(String eventId, Long bookId) {
+
+        if (processedEventRepository.existsById(eventId)) {
+            log.warn("Duplicate LOAN event id={} for bookId={}, skipping.", eventId, bookId);
+            return;
+        }
+
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new WebException(ErrorCode.BOOK_NOT_FOUND));
+
+        int availableCopies = book.getAvailableCopies();
+        if (availableCopies == 0)
+            throw new WebException(ErrorCode.OUT_OF_STOCK);
+
+        book.setAvailableCopies(availableCopies - 1);
+        int newAvailableCopies = bookRepository.save(book).getAvailableCopies();
+        processedEventRepository.save(new ProcessedEvent(eventId, java.time.LocalDateTime.now()));
+
+        log.info("Handled book loan event id={}, bookId={}, copies {} → {}.",
+                eventId, bookId, availableCopies, newAvailableCopies);
+    }
+
+    @Override
+    @Transactional
+    public void handleReturnEvent(String eventId, Long bookId) {
+
+        if (processedEventRepository.existsById(eventId)) {
+            log.warn("Duplicate RETURN event id={} for bookId={}, skipping.", eventId, bookId);
+            return;
+        }
+
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new WebException(ErrorCode.BOOK_NOT_FOUND));
+
+        int availableCopies = book.getAvailableCopies();
+        book.setAvailableCopies(availableCopies + 1);
+        int newAvailableCopies = bookRepository.save(book).getAvailableCopies();
+        processedEventRepository.save(new ProcessedEvent(eventId, java.time.LocalDateTime.now()));
+
+        log.info("Handled book return event id={}, bookId={}, copies {} → {}.",
+                eventId, bookId, availableCopies, newAvailableCopies);
     }
 }

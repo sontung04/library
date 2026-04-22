@@ -17,26 +17,30 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class UserService implements LifecycleEventHandler<Long, KafkaUserEventPayload>{
+public class UserService implements LifecycleEventHandler<Long, KafkaUserEventPayload> {
 
     private final UserRepository userRepository;
     private final LoanService loanService;
 
     /**
      * Applies a user deletion event to all of the user's loan snapshot records.
-     * Triggered by a Kafka {@code UserLifecycleEvent} with <code>DELETE</code> action
+     * Triggered by a Kafka {@code UserLifecycleEvent} with <code>DELETE</code>
+     * action
      * consumed from user-service.
      *
-     * @param userId   the ID of the affected user
+     * @param userId the ID of the affected user
      */
     @Override
     @Transactional
     public void handleDeletionEvent(Long userId) {
-        
-        Action userAction = Action.DELETE;
+
+        if (!userRepository.existsById(userId)) {
+            log.warn("User {} already deleted, skipping duplicate DELETE event.", userId);
+            return;
+        }
         loanService.deleteUserId(userId);
         userRepository.deleteById(userId);
-        logAction(userId, userAction);
+        logAction(userId, Action.DELETE);
     }
 
     @Override
@@ -53,7 +57,7 @@ public class UserService implements LifecycleEventHandler<Long, KafkaUserEventPa
     @Override
     @Transactional
     public void handleUpdateEvent(KafkaUserEventPayload payload) {
-        
+
         Action userAction = Action.UPDATE;
         Optional<User> user = userRepository.findById(payload.id());
         User userEntity;
@@ -68,7 +72,7 @@ public class UserService implements LifecycleEventHandler<Long, KafkaUserEventPa
             userEntity.setUsername(payload.username());
             userEntity.setEmail(payload.email());
         }
-        
+
         Long savedUserId = userRepository.save(userEntity).getId();
         logAction(savedUserId, userAction);
     }
@@ -79,8 +83,7 @@ public class UserService implements LifecycleEventHandler<Long, KafkaUserEventPa
         if (user.isEmpty()) {
             log.error("Cannot find user with id = {}", userId);
             return null;
-        }
-        else 
+        } else
             return UserMapper.toDto(user.get());
     }
 

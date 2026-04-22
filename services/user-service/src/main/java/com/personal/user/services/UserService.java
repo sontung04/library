@@ -5,6 +5,7 @@ import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.personal.user.dtos.CreateUserRequest;
 import com.personal.user.dtos.UpdateUserRequest;
@@ -15,8 +16,12 @@ import com.personal.user.exceptions.ErrorCode;
 import com.personal.user.exceptions.WebException;
 import com.personal.user.repositories.UserRepository;
 import com.personal.user.utils.UserMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.personal.user.events.Action;
-import com.personal.user.events.UserLifecycleEventPublisher;
+import com.personal.user.events.UserLifecycleEvent;
+import com.personal.user.outbox.KafkaOutboxEvent;
+import com.personal.user.outbox.KafkaOutboxEventRepository;
+import com.personal.user.dtos.KafkaUserEventPayload;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +36,9 @@ public class UserService {
     private final UserAuthCacheService userAuthCacheService;
     private final TokenStateService tokenStateService;
     private final LoanClient loanClient;
-    private final UserLifecycleEventPublisher userLifecycleEventPublisher;
+    private final KafkaOutboxEventRepository outboxRepository;
+    private final ObjectMapper objectMapper;
+    private static final String USER_LIFECYCLE_TOPIC = "user-lifecycle";
 
     /**
      * Fetches a {@link User} by ID from the repository and logs the result.
@@ -67,7 +74,8 @@ public class UserService {
     }
 
     /**
-     * Creates a new user account from an admin-supplied request and publish user creation event on kafka.
+     * Creates a new user account from an admin-supplied request and publish user
+     * creation event on kafka.
      * The password is BCrypt-hashed before persistence.
      * If {@code request.roles()} is {@code null}, the account defaults to
      * {@link Role#ROLE_USER}.
@@ -76,6 +84,7 @@ public class UserService {
      *                optional roles
      * @return a {@link UserDto} representing the newly created user
      */
+    @Transactional
     public UserDto createUser(CreateUserRequest request) {
         log.info("Creating a user.");
         User user = new User();
@@ -89,15 +98,15 @@ public class UserService {
                 newUser.getId(),
                 newUser.getUsername(),
                 newUser.getEmail());
-        
-        // Publish user creation event on kafka
-        userLifecycleEventPublisher.publish(UserMapper.toKafkaPayload(newUser), Action.CREATE);
+
+        saveOutboxEvent(UserMapper.toKafkaPayload(newUser), Action.CREATE);
 
         return UserDto.fromEntity(newUser);
     }
 
     /**
-     * Updates an existing user's profile and, optionally, their roles, then publish user update on kafka.
+     * Updates an existing user's profile and, optionally, their roles, then publish
+     * user update on kafka.
      *
      * <p>
      * Business rules enforced:
@@ -128,6 +137,7 @@ public class UserService {
      *                      tries to remove
      *                      their own admin role
      */
+    @Transactional
     public UserDto updateUser(Long userId, UpdateUserRequest request, Long currentAdminId) {
         log.info("Updating a user with id = {}", userId);
         User user = findUserAndLog(userId);
@@ -151,21 +161,20 @@ public class UserService {
 
         User updatedUser = userRepository.save(user);
         userAuthCacheService.evict(updatedUser.getId());
-        
+
         if (!newRoles.equals(oldRoles)) {
             log.info("AUDIT: Admin {} changed roles of user {} from {} to {}",
-            currentAdminId, userId, oldRoles, newRoles);
+                    currentAdminId, userId, oldRoles, newRoles);
             // Force the target user to re-authenticate with their new roles
             tokenStateService.clearActiveRefreshJti(userId);
         }
-        
+
         log.info("A user has been updated. User id: {}, username: {}, email: {}",
                 updatedUser.getId(),
                 updatedUser.getUsername(),
                 updatedUser.getEmail());
 
-        // Publish user update on kafka
-        userLifecycleEventPublisher.publish(UserMapper.toKafkaPayload(updatedUser), Action.UPDATE);
+        saveOutboxEvent(UserMapper.toKafkaPayload(updatedUser), Action.UPDATE);
 
         return UserDto.fromEntity(updatedUser);
     }
@@ -191,6 +200,7 @@ public class UserService {
      * @throws WebException with {@link ErrorCode#USER_HAS_ACTIVE_LOANS} if the user
      *                      has unreturned books
      */
+    @Transactional
     public void deleteUser(Long userId) {
         log.info("Deleting a specified user if exists");
 
@@ -198,12 +208,20 @@ public class UserService {
         if (loanClient.hasActiveLoans(userId)) {
             throw new WebException(ErrorCode.USER_HAS_ACTIVE_LOANS);
         }
+        saveOutboxEvent(UserMapper.toKafkaPayload(user), Action.DELETE);
         userRepository.delete(user);
         userAuthCacheService.evict(userId);
         tokenStateService.clearActiveRefreshJti(userId);
+    }
 
-        // Publish user deletion on kafka.
-        userLifecycleEventPublisher.publish(UserMapper.toKafkaPayload(user), Action.DELETE);
+    private void saveOutboxEvent(KafkaUserEventPayload payload, Action action) {
+        try {
+            String message = objectMapper.writeValueAsString(new UserLifecycleEvent(payload, action));
+            outboxRepository.save(new KafkaOutboxEvent(USER_LIFECYCLE_TOPIC, String.valueOf(payload.id()), message));
+        } catch (Exception e) {
+            log.error("Failed to serialize outbox event for userId={}, action={}", payload.id(), action, e);
+            throw new WebException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
     }
 
     /**

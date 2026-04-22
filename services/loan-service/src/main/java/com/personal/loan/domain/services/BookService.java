@@ -60,11 +60,13 @@ public class BookService implements LifecycleEventHandler<Long, KafkaBookEventPa
     @Transactional
     public void handleDeletionEvent(Long id) {
 
-        Action bookAction = Action.DELETE;
-
+        if (!bookRepository.existsById(id)) {
+            log.warn("Book {} already deleted, skipping duplicate DELETE event.", id);
+            return;
+        }
         loanService.deleteBookId(id);
         bookRepository.deleteById(id);
-        logAction(id, bookAction);
+        logAction(id, Action.DELETE);
     }
 
     private void logAction(Long bookId, Action bookAction) {

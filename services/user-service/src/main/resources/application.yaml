@@ -64,3 +64,6 @@ app:
     access-expiration-seconds: 900
     refresh-expiration-seconds: 1209600
     user-cache-ttl-seconds: 3600
+  outbox:
+    relay:
+      fixed-delay-ms: 5000

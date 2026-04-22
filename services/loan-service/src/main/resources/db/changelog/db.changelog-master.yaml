@@ -8,3 +8,9 @@ databaseChangeLog:
   - include:
       file: changes/V3__single_book_per_loan.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/V4__kafka_outbox.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/V5__read_model_tables.yaml
+      relativeToChangelogFile: true

@@ -7,14 +7,16 @@ import java.util.NoSuchElementException;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.annotation.Validated;
 
 import com.personal.loan.api.dtos.BookDto;
 import com.personal.loan.api.dtos.CreateLoanRequest;
 import com.personal.loan.api.dtos.LoanDto;
-import com.personal.loan.api.dtos.LoanItemDto;
 import com.personal.loan.api.mappers.BookMapper;
 import com.personal.loan.api.mappers.LoanMapper;
 import com.personal.loan.client.BookClient;
+import com.personal.loan.client.UserClient;
+import com.personal.loan.domain.entities.Book;
 import com.personal.loan.domain.entities.Loan;
 import com.personal.loan.domain.entities.LoanStatus;
 import com.personal.loan.domain.entities.User;
@@ -23,19 +25,31 @@ import com.personal.loan.domain.exception.WebException;
 import com.personal.loan.domain.repositories.BookRepository;
 import com.personal.loan.domain.repositories.LoanRepository;
 import com.personal.loan.domain.repositories.UserRepository;
+import com.personal.loan.events.BookAvailabilityEvent;
+import com.personal.loan.events.LoanAction;
+import com.personal.loan.outbox.KafkaOutboxEvent;
+import com.personal.loan.outbox.KafkaOutboxEventRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
+@Validated
 @Service
 @RequiredArgsConstructor
 public class LoanService {
 
+    private static final String BOOK_AVAILABILITY_TOPIC = "book-availability";
+
     private final LoanRepository loanRepository;
     private final BookClient bookClient;
+    private final UserClient userClient;
     private final UserRepository userRepository;
     private final BookRepository bookRepository;
+    private final KafkaOutboxEventRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Creates a new active loan for a user.
@@ -55,6 +69,9 @@ public class LoanService {
      *                {@code X-User-Id} gateway header
      * @param request the creation payload containing the {@code bookId} to borrow
      * @return a {@link LoanDto} representing the newly created loan
+     * @throws WebException with {@link ErrorCode#BOOK_NOT_FOUND} if no book is
+     *                      found
+     *                      in both loan service and book service
      * @throws WebException with {@link ErrorCode#INSUFFICIENT_BOOK_STOCK} if no
      *                      copies are available
      * @throws WebException with {@link ErrorCode#UNCATEGORIZED_EXCEPTION} if the
@@ -64,33 +81,14 @@ public class LoanService {
     public LoanDto createLoan(Long userId, CreateLoanRequest request) {
         log.info("Executing LoanService::createLoan");
 
-        BookDto bookDto;
-        try {
-            bookDto = bookRepository.findById(request.bookId())
-                    .map(BookMapper::toDto)
-                    .get();
-        } catch (NoSuchElementException e) {
-            log.info("Cannot find book {} from loan service's database.", request.bookId());
-            bookDto = bookClient.getBook(request.bookId());
-        }
+        BookDto bookDto = findBook(request.bookId());
 
         if (!checkBooksAvailability(bookDto))
             throw new WebException(ErrorCode.INSUFFICIENT_BOOK_STOCK);
 
-        LoanItemDto item = new LoanItemDto(
-                request.bookId(),
-                bookDto.title(),
-                bookDto.isbn());
+        subtractBookStock(bookDto);
 
-        subtractBookAmountFromDb(item, bookDto);
-
-        // Return null to username if user cannot be found
-        String username = userRepository.findById(userId)
-                .map(User::getUsername)
-                .orElseGet(() -> {
-                    log.info("Cannot find user with id = {}", userId);
-                    return null;
-                });
+        String username = findUsername(userId);
 
         Loan createdLoan = loanRepository.save(LoanMapper.toEntity(userId, username, request, bookDto));
         log.info("Loan created successfully: loanId={}, userId={}, bookId={}", createdLoan.getId(), userId,
@@ -99,18 +97,73 @@ public class LoanService {
         return LoanMapper.toDto(createdLoan);
     }
 
+    /**
+     * Tries to get a book's info from loan service's database.<br>
+     * If fails, tries to find in book service's database.<br>
+     * If fails too, throw exception.<br>
+     * If successes on finding book in book service, fills in the missing book data
+     * in loan service.
+     * 
+     * @param bookId id of the requested book
+     */
+    private BookDto findBook(Long bookId) {
+        BookDto bookDto;
+        try {
+            bookDto = bookRepository.findById(bookId)
+                    .map(BookMapper::toDto)
+                    .get();
+        } catch (NoSuchElementException e) {
+            log.info("Cannot find book {} from loan service's database.", bookId);
+            bookDto = bookClient.getBook(bookId);
+            if (bookDto == null)
+                throw new WebException(ErrorCode.BOOK_NOT_FOUND);
+            else {
+                log.info("Found book {} from book service's database.", bookId);
+                handleBookRecordMissing(bookDto);
+            }
+        }
+        return bookDto;
+    }
+
+    private void handleBookRecordMissing(BookDto bookDto) {
+        Book savedBook = bookRepository.save(BookMapper.toEntity(bookDto));
+        log.info("Book {} is added to match the current status of book service's database.", savedBook.getId());
+    }
+
+    private String findUsername(Long userId) {
+        return userRepository.findById(userId)
+                .map(User::getUsername)
+                .orElseGet(() -> {
+                    log.info("User {} not in local read-model, falling back to user-service.", userId);
+                    String username = userClient.getUsername(userId);
+                    if (username == null || username.equals(String.valueOf(userId))) {
+                        // UserClient returns userId.toString() when 404 — treat that as not found
+                        throw new WebException(ErrorCode.USER_NOT_FOUND);
+                    }
+                    userRepository.save(new User(userId, username, null));
+                    log.info("User {} backfilled into local read-model.", userId);
+                    return username;
+                });
+    }
+
     private boolean checkBooksAvailability(BookDto book) {
         if (book == null)
             return false;
         return book.availableCopies() > 0;
     }
 
-    private void subtractBookAmountFromDb(LoanItemDto item, BookDto currentBook) {
-        int newAvailableCopies = currentBook.availableCopies() - 1;
-        boolean stockUpdated = bookClient.updateAvailability(item.bookId(), newAvailableCopies);
-        if (!stockUpdated) {
-            throw new WebException(ErrorCode.UNCATEGORIZED_EXCEPTION);
-        }
+    /**
+     * Subtract available copies in loan service and other services' book copies
+     * 
+     * @param bookId id of the book that need modification
+     */
+    private void subtractBookStock(BookDto bookDto) {
+
+        Book book = BookMapper.toEntity(bookDto);
+        book.setAvailableCopies(book.getAvailableCopies() - 1);
+        bookRepository.save(book);
+
+        saveOutboxEvent(bookDto.id(), LoanAction.LOAN);
     }
 
     /**
@@ -179,7 +232,8 @@ public class LoanService {
      *         return date set
      * @throws WebException with {@link ErrorCode#LOAN_NOT_FOUND} if the loan does
      *                      not exist
-     * @throws WebException with {@link ErrorCode#LOAN_NOT_ACTIVE} if the loan is
+     * @throws WebException with {@link ErrorCode#LOAN_ALREADY_RETURNED} if the loan
+     *                      is
      *                      already returned
      */
     @Transactional
@@ -189,8 +243,8 @@ public class LoanService {
         Loan loan = loanRepository.findById(loanId)
                 .orElseThrow(() -> new WebException(ErrorCode.LOAN_NOT_FOUND));
 
-        if (loan.getStatus() != LoanStatus.ACTIVE) {
-            throw new WebException(ErrorCode.LOAN_NOT_ACTIVE);
+        if (loan.getStatus() == LoanStatus.RETURNED) {
+            throw new WebException(ErrorCode.LOAN_ALREADY_RETURNED);
         }
 
         restoreBookStock(loan.getBookId());
@@ -198,6 +252,32 @@ public class LoanService {
         loan.setReturnDate(LocalDate.now());
 
         return LoanMapper.toDto(loanRepository.save(loan));
+    }
+
+    /**
+     * Recovers 1 book in this service and publishes book return event to kafka.
+     * 
+     * @param bookId id of the returned book
+     */
+    private void restoreBookStock(@NotNull Long bookId) {
+
+        Book book = BookMapper.toEntity(findBook(bookId));
+        book.setAvailableCopies(book.getAvailableCopies() + 1);
+        int newAvailableCopies = bookRepository.save(book).getAvailableCopies();
+
+        saveOutboxEvent(bookId, LoanAction.RETURN);
+
+        log.info("Book with id = {}'s stock restored with new available copies = {}", bookId, newAvailableCopies);
+    }
+
+    private void saveOutboxEvent(Long bookId, LoanAction action) {
+        try {
+            String payload = objectMapper.writeValueAsString(new BookAvailabilityEvent(bookId, action));
+            outboxRepository.save(new KafkaOutboxEvent(BOOK_AVAILABILITY_TOPIC, String.valueOf(bookId), payload));
+        } catch (Exception e) {
+            log.error("Failed to serialize outbox event for bookId={}, action={}", bookId, action, e);
+            throw new WebException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
     }
 
     /**
@@ -220,22 +300,6 @@ public class LoanService {
         List<Loan> loans = loanRepository.findByBookId(bookId);
         loans.forEach(loan -> loan.setBookId(null));
         loanRepository.saveAll(loans);
-    }
-
-    private void restoreBookStock(Long bookId) {
-
-        if (bookId == null) {
-            log.error("Trying to return an already deleted book");
-            return;
-        }
-
-        BookDto book = bookClient.getBook(bookId);
-        if (book != null) {
-            boolean stockUpdated = bookClient.updateAvailability(bookId, book.availableCopies() + 1);
-            if (!stockUpdated) {
-                log.warn("Failed to restore stock for bookId={} after return", bookId);
-            }
-        }
     }
 
     public void deleteUserId(Long userId) {
