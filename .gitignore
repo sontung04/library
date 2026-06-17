@@ -32,3 +32,4 @@ docs/
 **/nbbuild/
 **/nbdist/
 **/.nb-gradle/
+.github
