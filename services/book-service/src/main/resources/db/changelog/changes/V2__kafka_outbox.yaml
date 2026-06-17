@@ -1,0 +1,61 @@
+databaseChangeLog:
+  - changeSet:
+      id: 2
+      author: library
+      changes:
+        - createTable:
+            tableName: kafka_outbox_events
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: topic
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: message_key
+                  type: VARCHAR(255)
+              - column:
+                  name: payload
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: published
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: processed_events
+            columns:
+              - column:
+                  name: event_id
+                  type: VARCHAR(64)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: processed_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_book_outbox_published
+            tableName: kafka_outbox_events
+            columns:
+              - column:
+                  name: published
+              - column:
+                  name: created_at

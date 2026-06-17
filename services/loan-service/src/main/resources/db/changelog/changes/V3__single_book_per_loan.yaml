@@ -1,0 +1,68 @@
+databaseChangeLog:
+  - changeSet:
+      id: 3
+      author: library
+      changes:
+        - addColumn:
+            tableName: loans
+            columns:
+              - column:
+                  name: book_id
+                  type: BIGINT
+              - column:
+                  name: book_title
+                  type: VARCHAR(255)
+              - column:
+                  name: book_isbn
+                  type: VARCHAR(255)
+              - column:
+                  name: book_deleted
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+
+        - sql:
+            dbms: postgresql
+            sql: |
+              UPDATE loans l
+              SET book_id = li.book_id,
+                  book_title = COALESCE(li.book_title, 'unknown'),
+                  book_isbn = COALESCE(li.book_isbn, 'unknown'),
+                  book_deleted = COALESCE(li.book_deleted, false)
+              FROM (
+                  SELECT DISTINCT ON (loan_id)
+                      loan_id,
+                      book_id,
+                      book_title,
+                      book_isbn,
+                      book_deleted
+                  FROM loan_items
+                  ORDER BY loan_id, id
+              ) li
+              WHERE l.id = li.loan_id;
+
+        - addNotNullConstraint:
+            tableName: loans
+            columnName: book_id
+            columnDataType: BIGINT
+            defaultNullValue: 0
+
+        - addNotNullConstraint:
+            tableName: loans
+            columnName: book_title
+            columnDataType: VARCHAR(255)
+            defaultNullValue: unknown
+
+        - addNotNullConstraint:
+            tableName: loans
+            columnName: book_isbn
+            columnDataType: VARCHAR(255)
+            defaultNullValue: unknown
+
+        - addNotNullConstraint:
+            tableName: loans
+            columnName: book_deleted
+            columnDataType: BOOLEAN
+            defaultNullValueBoolean: false
+
+        - dropTable:
+            tableName: loan_items

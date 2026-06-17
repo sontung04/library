@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['gateway:8080']
+
+  - job_name: user-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['user-service:8081']
+
+  - job_name: book-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['book-service:8082']
+
+  - job_name: loan-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['loan-service:8083']
+
+  - job_name: discovery-server
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ['discovery-server:8761']

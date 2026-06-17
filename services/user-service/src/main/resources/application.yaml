@@ -1,0 +1,69 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  docker:
+    compose:
+      enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/user_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    eureka-server-connect-timeout-seconds: 10
+    eureka-server-read-timeout-seconds: 10
+    registry-fetch-interval-seconds: 10
+    initial-instance-info-replication-interval-seconds: 10
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+app:
+  internal:
+    api-key: ${INTERNAL_API_KEY:library-internal-key}
+  auth:
+    trust-gateway-validation: ${TRUST_GATEWAY_VALIDATION:false}
+  jwt:
+    issuer: "user-service"
+    secret: ${JWT_SECRET:faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
+    access-expiration-seconds: 900
+    refresh-expiration-seconds: 1209600
+    user-cache-ttl-seconds: 3600
+  outbox:
+    relay:
+      fixed-delay-ms: 5000

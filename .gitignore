@@ -1,3 +1,35 @@
 .vscode/
-documents/
-note.txt
+
+### Build outputs ###
+**/target/
+**/build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+**/.mvn/wrapper/maven-wrapper.jar
+**/node_modules/
+
+### Generated docs/files ###
+**/HELP.md
+docs/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+**/nbproject/private/
+**/nbbuild/
+**/nbdist/
+**/.nb-gradle/
+.github

@@ -1,0 +1,277 @@
+services:
+  discovery-server:
+    build:
+      context: .
+      dockerfile: ./infrastructure/discovery-server/Dockerfile
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - library-net
+
+  gateway:
+    build:
+      context: .
+      dockerfile: ./infrastructure/gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-library-internal-key}
+      JWT_SECRET: ${JWT_SECRET:-faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      book-service:
+        condition: service_healthy
+      loan-service:
+        condition: service_healthy
+    networks:
+      - library-net
+
+  postgres-user:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d user_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - library-net
+
+  user-service:
+    build:
+      context: .
+      dockerfile: ./services/user-service/Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      DB_URL: jdbc:postgresql://postgres-user:5432/user_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-library-internal-key}
+      JWT_SECRET: ${JWT_SECRET:-faf82b847cff0bbd37cd3b79751664d868b97c3f05dea0f30f69fb78f2630593}
+      TRUST_GATEWAY_VALIDATION: ${TRUST_GATEWAY_VALIDATION:-false}
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres-user:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+    networks:
+      - library-net
+
+  postgres-book:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: book_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d book_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - library-net
+
+  book-service:
+    build:
+      context: .
+      dockerfile: ./services/book-service/Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      DB_URL: jdbc:postgresql://postgres-book:5432/book_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres-book:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8082/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+    networks:
+      - library-net
+
+  postgres-loan:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: loan_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d loan_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - library-net
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - library-net
+
+  kafka:
+    image: apache/kafka:latest
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 20s
+    networks:
+      - library-net
+
+  loan-service:
+    build:
+      context: .
+      dockerfile: ./services/loan-service/Dockerfile
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      DB_URL: jdbc:postgresql://postgres-loan:5432/loan_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-library-internal-key}
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres-loan:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8083/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
+    networks:
+      - library-net
+
+  fe:
+    build: ./frontend/fe
+    ports:
+      - "80:80"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - library-net
+  redisinsight:
+    image: redis/redisinsight:latest
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - library-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+    - "--config.file=/etc/prometheus/prometheus.yaml"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yaml:/etc/prometheus/prometheus.yaml
+    ports:
+      - "9090:9090"
+    networks:
+      - library-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - library-net
+
+networks:
+  library-net:
+    driver: bridge
+
+# For surviving container recreation
+volumes:
+  redis-data:
+  grafana-data:
+  redisinsight-data:
